@@ -232,7 +232,7 @@ def get_detection_dataset_dicts(
             for dataset_i_dicts, proposal_file in zip(dataset_dicts, proposal_files)
         ]
 
-    dataset_dicts = list(itertools.chain.from_iterable(dataset_dicts))
+    dataset_dicts = list(itertools.chain.from_iterable(dataset_dicts))  # support multi-dataset
 
     has_instances = "annotations" in dataset_dicts[0]
     # Keep images without instance-level GT if the dataset has semantic labels.

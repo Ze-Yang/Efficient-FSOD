@@ -56,7 +56,7 @@ class StandardRPNHead(nn.Module):
         assert (
             len(set(num_cell_anchors)) == 1
         ), "Each level must have the same number of cell anchors"
-        num_cell_anchors = num_cell_anchors[0]
+        num_cell_anchors = num_cell_anchors[0]  # num_cell_anchors = 3
 
         # 3x3 conv for the hidden representation
         self.conv = nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=1, padding=1)

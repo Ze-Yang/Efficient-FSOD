@@ -265,7 +265,7 @@ class RPNOutputs(object):
             anchors_i: anchors for i-th image
             gt_boxes_i: ground-truth boxes for i-th image
             """
-            match_quality_matrix = retry_if_cuda_oom(pairwise_iou)(gt_boxes_i, anchors_i)
+            match_quality_matrix = retry_if_cuda_oom(pairwise_iou)(gt_boxes_i, anchors_i)  # IOU
             matched_idxs, gt_objectness_logits_i = retry_if_cuda_oom(self.anchor_matcher)(
                 match_quality_matrix
             )
@@ -319,7 +319,7 @@ class RPNOutputs(object):
             label.scatter_(0, neg_idx, 0)
             return label
 
-        gt_objectness_logits, gt_anchor_deltas = self._get_ground_truth()
+        gt_objectness_logits, gt_anchor_deltas = self._get_ground_truth()  # matching anchors to gt
         """
         gt_objectness_logits: list of N tensors. Tensor i is a vector whose length is the
             total number of anchors in image i (i.e., len(anchors[i]))
@@ -334,7 +334,7 @@ class RPNOutputs(object):
         # Stack to: (N, num_anchors_per_image)
         gt_objectness_logits = torch.stack(
             [resample(label) for label in gt_objectness_logits], dim=0
-        )
+        )  # only 256 anchors per image contributes to the loss, others are ignored.
 
         # Log the number of positive/negative anchors per-image that's used in training
         num_pos_anchors = (gt_objectness_logits == 1).sum().item()
