@@ -44,9 +44,12 @@ def mask_rcnn_loss(pred_mask_logits, instances):
     for instances_per_image in instances:
         if len(instances_per_image) == 0:
             continue
-        if not cls_agnostic_mask:
-            gt_classes_per_image = instances_per_image.gt_classes.to(dtype=torch.int64)
-            gt_classes.append(gt_classes_per_image)
+        # if not cls_agnostic_mask:
+        #     gt_classes_per_image = instances_per_image.gt_classes.to(dtype=torch.int64)
+        #     gt_classes.append(gt_classes_per_image)
+
+        gt_classes_per_image = instances_per_image.gt_classes.to(dtype=torch.int64)
+        gt_classes.append(gt_classes_per_image)
 
         gt_masks_per_image = instances_per_image.gt_masks.crop_and_resize(
             instances_per_image.proposal_boxes.tensor, mask_side_len
@@ -61,16 +64,26 @@ def mask_rcnn_loss(pred_mask_logits, instances):
 
     if cls_agnostic_mask:
         pred_mask_logits = pred_mask_logits[:, 0]
+        gt_classes = cat(gt_classes, dim=0)
+        voc_inds = (0, 1, 2, 3, 4, 5, 6, 8, 14, 15, 16, 17, 18, 19, 39, 56, 57, 58, 60, 62)
+        weight = torch.tensor([1 if cls in voc_inds else 0 for cls in gt_classes],
+                              dtype=torch.float32, device=torch.cuda.current_device())
+        # filter = torch.tensor([1 if cls not in voc_inds else 0 for cls in gt_classes],
+        #                       dtype=torch.bool, device=torch.cuda.current_device())  # filter out voc classes
+        # pred_mask_logits_filtered = pred_mask_logits[filter]
+        # gt_masks_filtered = gt_masks[filter]
     else:
         indices = torch.arange(total_num_masks)
         gt_classes = cat(gt_classes, dim=0)
         pred_mask_logits = pred_mask_logits[indices, gt_classes]
-
     if gt_masks.dtype == torch.bool:
         gt_masks_bool = gt_masks
     else:
         # Here we allow gt_masks to be float as well (depend on the implementation of rasterize())
         gt_masks_bool = gt_masks > 0.5
+
+    # if not gt_masks.numel():
+    #     return torch.tensor(0, dtype=torch.float32, device=gt_masks_bool.device, requires_grad=False)
 
     # Log the training accuracy (using gt classes and 0.5 threshold)
     mask_incorrect = (pred_mask_logits > 0.0) != gt_masks_bool
@@ -86,9 +99,10 @@ def mask_rcnn_loss(pred_mask_logits, instances):
     storage.put_scalar("mask_rcnn/false_positive", false_positive)
     storage.put_scalar("mask_rcnn/false_negative", false_negative)
 
+    weight = weight.unsqueeze(-1).unsqueeze(-1).expand(-1, 28, 28)
     mask_loss = F.binary_cross_entropy_with_logits(
-        pred_mask_logits, gt_masks.to(dtype=torch.float32), reduction="mean"
-    )
+        pred_mask_logits, gt_masks.to(dtype=torch.float32), reduction="mean", weight=weight
+    ) * weight.numel() / max(weight.sum(), 1.0)  # mean of those with weight 1.0
     return mask_loss
 
 
