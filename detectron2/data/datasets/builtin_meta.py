@@ -188,13 +188,25 @@ KEYPOINT_CONNECTION_RULES = [
 ]
 
 
-def _get_coco_instances_meta():
+def _get_coco_instances_meta(dataset_name=''):
     thing_ids = [k["id"] for k in COCO_CATEGORIES if k["isthing"] == 1]
-    thing_colors = [k["color"] for k in COCO_CATEGORIES if k["isthing"] == 1]
+    voc_inds = (0, 1, 2, 3, 4, 5, 6, 8, 14, 15, 16, 17, 18, 19, 39, 56, 57, 58, 60, 62)
+    nonvoc_inds = tuple([i for i in range(80) if i not in voc_inds])
+    if 'nonvoc' in dataset_name:
+        thing_ids = [thing_ids[i] for i in nonvoc_inds + voc_inds]
+        thing_classes = [COCO_CATEGORIES[k]["name"] for k in nonvoc_inds + voc_inds]
+        thing_colors = [COCO_CATEGORIES[k]["color"] for k in nonvoc_inds + voc_inds]
+    elif 'voc' in dataset_name:
+        thing_ids = [thing_ids[i] for i in voc_inds + nonvoc_inds]
+        thing_classes = [COCO_CATEGORIES[k]["name"] for k in voc_inds + nonvoc_inds]
+        thing_colors = [COCO_CATEGORIES[k]["color"] for k in nonvoc_inds + voc_inds]
+    else:
+        thing_colors = [k["color"] for k in COCO_CATEGORIES if k["isthing"] == 1]
+        thing_classes = [k["name"] for k in COCO_CATEGORIES if k["isthing"] == 1]
+    # thing_colors = [k["color"] for k in COCO_CATEGORIES if k["isthing"] == 1]
     assert len(thing_ids) == 80, len(thing_ids)
     # Mapping from the incontiguous COCO category id to an id in [0, 79]
     thing_dataset_id_to_contiguous_id = {k: i for i, k in enumerate(thing_ids)}
-    thing_classes = [k["name"] for k in COCO_CATEGORIES if k["isthing"] == 1]
     ret = {
         "thing_dataset_id_to_contiguous_id": thing_dataset_id_to_contiguous_id,
         "thing_classes": thing_classes,
@@ -236,9 +248,9 @@ def _get_coco_panoptic_separated_meta():
     return ret
 
 
-def _get_builtin_metadata(dataset_name):
+def _get_builtin_metadata(dataset_name, subname=None):
     if dataset_name == "coco":
-        return _get_coco_instances_meta()
+        return _get_coco_instances_meta(subname)
     if dataset_name == "coco_panoptic_separated":
         return _get_coco_panoptic_separated_meta()
     elif dataset_name == "coco_person":

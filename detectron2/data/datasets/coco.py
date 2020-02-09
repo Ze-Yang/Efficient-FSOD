@@ -42,6 +42,7 @@ def load_coco_json(json_file, image_root, dataset_name=None, extra_annotation_ke
             loaded into the dataset dict (besides "iscrowd", "bbox", "keypoints",
             "category_id", "segmentation"). The values for these keys will be returned as-is.
             For example, the densepose annotations are loaded in this way.
+        type (str): options [voc, nonvoc, voc_nonvoc, nonvoc_voc], decides the sequence of category_id.
 
     Returns:
         list[dict]: a list of dicts in Detectron2 standard format. (See
@@ -66,8 +67,8 @@ def load_coco_json(json_file, image_root, dataset_name=None, extra_annotation_ke
         cat_ids = sorted(coco_api.getCatIds())
         cats = coco_api.loadCats(cat_ids)
         # The categories in a custom json file may not be sorted.
-        thing_classes = [c["name"] for c in sorted(cats, key=lambda x: x["id"])]
-        meta.thing_classes = thing_classes
+        # thing_classes = [c["name"] for c in sorted(cats, key=lambda x: x["id"])]
+        # meta.thing_classes = thing_classes
 
         # In COCO, certain category ids are artificially removed,
         # and by convention they are always ignored.
@@ -84,8 +85,7 @@ def load_coco_json(json_file, image_root, dataset_name=None, extra_annotation_ke
 Category ids in annotations are not in [1, #categories]! We'll apply a mapping for you.
 """
                 )
-        id_map = {v: i for i, v in enumerate(cat_ids)}
-        meta.thing_dataset_id_to_contiguous_id = id_map
+        id_map = meta.thing_dataset_id_to_contiguous_id
 
     # sort indices for reproducible results
     img_ids = sorted(coco_api.imgs.keys())

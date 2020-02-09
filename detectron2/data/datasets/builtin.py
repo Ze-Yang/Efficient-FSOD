@@ -40,11 +40,11 @@ _PREDEFINED_SPLITS_COCO["coco"] = {
         "coco/annotations/instances_valminusminival2014.json",
     ),
     "coco_2017_train": ("coco/train2017", "coco/annotations/instances_train2017.json"),
-    # "coco_2017_train_voc_split": ("coco/train2017", "coco/annotations/split_voc_instances_train2017.json"),
-    # "coco_2017_train_nonvoc_split": ("coco/train2017", "coco/annotations/split_nonvoc_instances_train2017.json"),
+    "coco_2017_train_voc_split": ("coco/train2017", "coco/annotations/split_voc_instances_train2017.json"),
+    "coco_2017_train_nonvoc_split": ("coco/train2017", "coco/annotations/split_nonvoc_instances_train2017.json"),
     "coco_2017_val": ("coco/val2017", "coco/annotations/instances_val2017.json"),
-    # "coco_2017_val_voc_split": ("coco/val2017", "coco/annotations/split_voc_instances_val2017.json"),
-    # "coco_2017_val_nonvoc_split": ("coco/val2017", "coco/annotations/split_nonvoc_instances_val2017.json"),
+    "coco_2017_val_voc_split": ("coco/val2017", "coco/annotations/split_voc_instances_val2017.json"),
+    "coco_2017_val_nonvoc_split": ("coco/val2017", "coco/annotations/split_nonvoc_instances_val2017.json"),
     "coco_2017_test": ("coco/test2017", "coco/annotations/image_info_test2017.json"),
     "coco_2017_test-dev": ("coco/test2017", "coco/annotations/image_info_test-dev2017.json"),
     "coco_2017_val_100": ("coco/val2017", "coco/annotations/instances_val2017_100.json"),
@@ -111,7 +111,7 @@ def register_all_coco(root="datasets"):
             # Assume pre-defined datasets live in `./datasets`.
             register_coco_instances(
                 key,
-                _get_builtin_metadata(dataset_name),
+                _get_builtin_metadata(dataset_name, key),
                 os.path.join(root, json_file) if "://" not in json_file else json_file,
                 os.path.join(root, image_root),
             )
