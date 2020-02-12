@@ -16,5 +16,10 @@ DATASETS:
   TRAIN: ('coco_2017_train_nonvoc_split',)
   TEST: ('coco_2017_val_nonvoc_split',)
 
-#OUTPUT_DIR:
-#  ./COCO60_pretrain
+DATALOADER:
+  NUM_WORKERS: 1
+
+
+
+OUTPUT_DIR:
+  ./results/COCO60_pretrain

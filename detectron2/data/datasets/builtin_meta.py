@@ -192,15 +192,19 @@ def _get_coco_instances_meta(dataset_name=''):
     thing_ids = [k["id"] for k in COCO_CATEGORIES if k["isthing"] == 1]
     voc_inds = (0, 1, 2, 3, 4, 5, 6, 8, 14, 15, 16, 17, 18, 19, 39, 56, 57, 58, 60, 62)
     nonvoc_inds = tuple([i for i in range(80) if i not in voc_inds])
-    if 'nonvoc' in dataset_name:
-        thing_ids = [thing_ids[i] for i in nonvoc_inds + voc_inds]
-        thing_classes = [COCO_CATEGORIES[k]["name"] for k in nonvoc_inds + voc_inds]
-        thing_colors = [COCO_CATEGORIES[k]["color"] for k in nonvoc_inds + voc_inds]
-    elif 'voc' in dataset_name:
-        thing_ids = [thing_ids[i] for i in voc_inds + nonvoc_inds]
-        thing_classes = [COCO_CATEGORIES[k]["name"] for k in voc_inds + nonvoc_inds]
-        thing_colors = [COCO_CATEGORIES[k]["color"] for k in nonvoc_inds + voc_inds]
+    # if 'train_nonvoc' in dataset_name or 'val_voc' in dataset_name:
+    if True:
+        id_map = nonvoc_inds + voc_inds
+        thing_ids = [thing_ids[i] for i in id_map]
+        thing_classes = [COCO_CATEGORIES[k]["name"] for k in id_map]
+        thing_colors = [COCO_CATEGORIES[k]["color"] for k in id_map]
+    elif 'train_voc' in dataset_name or 'val_nonvoc' in dataset_name:
+        id_map = voc_inds + nonvoc_inds
+        thing_ids = [thing_ids[i] for i in id_map]
+        thing_classes = [COCO_CATEGORIES[k]["name"] for k in id_map]
+        thing_colors = [COCO_CATEGORIES[k]["color"] for k in id_map]
     else:
+        id_map = range(len(thing_ids))
         thing_colors = [k["color"] for k in COCO_CATEGORIES if k["isthing"] == 1]
         thing_classes = [k["name"] for k in COCO_CATEGORIES if k["isthing"] == 1]
     # thing_colors = [k["color"] for k in COCO_CATEGORIES if k["isthing"] == 1]
@@ -211,6 +215,7 @@ def _get_coco_instances_meta(dataset_name=''):
         "thing_dataset_id_to_contiguous_id": thing_dataset_id_to_contiguous_id,
         "thing_classes": thing_classes,
         "thing_colors": thing_colors,
+        "id_map": id_map
     }
     return ret
 

@@ -267,7 +267,7 @@ class COCOEvaluator(DatasetEvaluator):
         assert len(class_names) == precisions.shape[2]
 
         results_per_category = []
-        for idx, name in enumerate(class_names):
+        for idx, name in zip(self._metadata.id_map, class_names):
             # area range index 0: all area ranges
             # max dets index -1: typically 100 per image
             precision = precisions[:, :, idx, 0, -1]
