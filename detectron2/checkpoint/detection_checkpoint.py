@@ -4,7 +4,7 @@ from fvcore.common.checkpoint import Checkpointer
 from fvcore.common.file_io import PathManager
 
 import detectron2.utils.comm as comm
-
+import os
 from .c2_model_loading import align_and_update_state_dicts
 
 
@@ -14,7 +14,7 @@ class DetectionCheckpointer(Checkpointer):
     model zoo, and apply conversions for legacy models.
     """
 
-    def __init__(self, model, save_dir="", *, save_to_disk=None, **checkpointables):
+    def __init__(self, model, save_dir="", phase=None, *, save_to_disk=None, **checkpointables):
         is_main_process = comm.is_main_process()
         super().__init__(
             model,
@@ -22,6 +22,7 @@ class DetectionCheckpointer(Checkpointer):
             save_to_disk=is_main_process if save_to_disk is None else save_to_disk,
             **checkpointables,
         )
+        self.phase = phase
 
     def _load_file(self, filename):
         if filename.endswith(".pkl"):
@@ -57,3 +58,41 @@ class DetectionCheckpointer(Checkpointer):
             checkpoint["model"] = model_state_dict
         # for non-caffe2 models, use standard ways to load it
         super()._load_model(checkpoint)
+
+    def load(self, path: str):
+        """
+        Load from the given checkpoint. When path points to network file, this
+        function has to be called on all ranks.
+
+        Args:
+            path (str): path or url to the checkpoint. If empty, will not load
+                anything.
+        Returns:
+            dict:
+                extra data loaded from the checkpoint that has not been
+                processed. For example, those saved with
+                :meth:`.save(**extra_data)`.
+        """
+        if not path:
+            # no checkpoint provided
+            self.logger.info(
+                "No checkpoint found. Initializing model from scratch"
+            )
+            return {}
+        self.logger.info("Loading checkpoint from {}".format(path))
+        if not os.path.isfile(path):
+            path = PathManager.get_local_path(path)
+            assert os.path.isfile(path), "Checkpoint {} not found!".format(path)
+
+        checkpoint = self._load_file(path)
+        self._load_model(checkpoint)
+        if self.phase == 2:
+            self.checkpointables = {}
+            checkpoint.pop('iteration')
+        for key, obj in self.checkpointables.items():
+            if key in checkpoint:
+                self.logger.info("Loading {} from {}".format(key, path))
+                obj.load_state_dict(checkpoint.pop(key))
+
+        # return any further checkpoint data
+        return checkpoint

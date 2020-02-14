@@ -192,13 +192,12 @@ def _get_coco_instances_meta(dataset_name=''):
     thing_ids = [k["id"] for k in COCO_CATEGORIES if k["isthing"] == 1]
     voc_inds = (0, 1, 2, 3, 4, 5, 6, 8, 14, 15, 16, 17, 18, 19, 39, 56, 57, 58, 60, 62)
     nonvoc_inds = tuple([i for i in range(80) if i not in voc_inds])
-    # if 'train_nonvoc' in dataset_name or 'val_voc' in dataset_name:
-    if True:
+    if 'nonvoc' in dataset_name:
         id_map = nonvoc_inds + voc_inds
         thing_ids = [thing_ids[i] for i in id_map]
         thing_classes = [COCO_CATEGORIES[k]["name"] for k in id_map]
         thing_colors = [COCO_CATEGORIES[k]["color"] for k in id_map]
-    elif 'train_voc' in dataset_name or 'val_nonvoc' in dataset_name:
+    elif 'voc' in dataset_name:
         id_map = voc_inds + nonvoc_inds
         thing_ids = [thing_ids[i] for i in id_map]
         thing_classes = [COCO_CATEGORIES[k]["name"] for k in id_map]

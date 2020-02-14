@@ -1,0 +1,40 @@
+_BASE_: "../Base-RCNN-FPN.yaml"
+
+SEED: 100
+MODEL:
+  WEIGHTS: "detectron2://ImageNetPretrained/MSRA/R-50.pkl"
+  MASK_ON: True
+  RESNETS:
+    DEPTH: 50
+  ROI_BOX_HEAD:
+    CLS_AGNOSTIC_BBOX_REG: True
+  ROI_MASK_HEAD:
+    CLS_AGNOSTIC_MASK: True
+  ROI_HEADS:
+    NUM_CLASSES: 20
+
+SOLVER:
+#  STEPS: (600, 800)
+#  WARMUP_ITERS: 10
+#  MAX_ITER: 900
+#  CHECKPOINT_PERIOD: 50
+  STEPS: (1000, 1300)
+    WARMUP_ITERS: 10
+    MAX_ITER: 1500
+    CHECKPOINT_PERIOD: 100
+
+PHASE: 2
+
+DATASETS:
+  TRAIN: ('coco_2017_train_voc_split',)
+  TEST: ('coco_2017_val_voc_split',)
+  SHOT: 30
+
+#DATALOADER:
+#  NUM_WORKERS: 1
+
+
+LOAD_FILE:
+  ./results/COCO60_pretrain/model_final.pth
+OUTPUT_DIR:
+  ./results/fewshot/voc_30shot_1

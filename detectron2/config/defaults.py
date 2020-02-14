@@ -86,6 +86,8 @@ _C.INPUT.MASK_FORMAT = "polygon"  # alternative: "bitmask"
 # Dataset
 # -----------------------------------------------------------------------------
 _C.DATASETS = CN()
+# Shots
+_C.DATASETS.SHOT = 5
 # List of the dataset names for training. Must be registered in DatasetCatalog
 _C.DATASETS.TRAIN = ()
 # List of the pre-computed proposal files for training, which must be consistent
@@ -551,8 +553,12 @@ _C.TEST.PRECISE_BN.NUM_ITER = 200
 # ---------------------------------------------------------------------------- #
 # Misc options
 # ---------------------------------------------------------------------------- #
+# 1 for pre-training, 2 for fine-tuning
+_C.PHASE = 1
 # Directory where output files are written
 _C.OUTPUT_DIR = "./output"
+# Directory where output files are written
+_C.LOAD_FILE = "./results/COCO60_pretrain/model_final.pth"
 # Set seed to negative to fully randomize everything.
 # Set seed to positive to use a fixed seed. Note that a fixed seed does not
 # guarantee fully deterministic behavior.

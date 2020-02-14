@@ -206,7 +206,7 @@ def print_instances_class_histogram(dataset_dicts, class_names):
 
 
 def get_detection_dataset_dicts(
-    dataset_names, filter_empty=True, min_keypoints=0, proposal_files=None
+    dataset_names, filter_empty=True, min_keypoints=0, proposal_files=None, cfg=None
 ):
     """
     Load and prepare dataset dicts for instance detection/segmentation and semantic segmentation.
@@ -220,7 +220,7 @@ def get_detection_dataset_dicts(
             that match each dataset in `dataset_names`.
     """
     assert len(dataset_names)
-    dataset_dicts = [DatasetCatalog.get(dataset_name) for dataset_name in dataset_names]
+    dataset_dicts = [DatasetCatalog.get(dataset_name)(cfg) for dataset_name in dataset_names]
     for dataset_name, dicts in zip(dataset_names, dataset_dicts):
         assert len(dicts), "Dataset '{}' is empty!".format(dataset_name)
 
@@ -292,6 +292,7 @@ def build_detection_train_loader(cfg, mapper=None):
         if cfg.MODEL.KEYPOINT_ON
         else 0,
         proposal_files=cfg.DATASETS.PROPOSAL_FILES_TRAIN if cfg.MODEL.LOAD_PROPOSALS else None,
+        cfg=cfg
     )
     dataset = DatasetFromList(dataset_dicts, copy=False)
 

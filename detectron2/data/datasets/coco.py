@@ -6,7 +6,8 @@ import os
 import datetime
 import json
 import numpy as np
-
+import random
+import itertools
 from PIL import Image
 
 from fvcore.common.timer import Timer
@@ -26,7 +27,7 @@ logger = logging.getLogger(__name__)
 __all__ = ["load_coco_json", "load_sem_seg"]
 
 
-def load_coco_json(json_file, image_root, dataset_name=None, extra_annotation_keys=None):
+def load_coco_json(cfg, json_file, image_root, dataset_name=None, extra_annotation_keys=None):
     """
     Load a json file with COCO's instances annotation format.
     Currently supports instance detection, instance segmentation,
@@ -86,6 +87,7 @@ Category ids in annotations are not in [1, #categories]! We'll apply a mapping f
 """
                 )
         id_map = meta.thing_dataset_id_to_contiguous_id
+        id_of_int = list(id_map.keys())[:60] if 'nonvoc' in dataset_name else list(id_map.keys())[:20]  # id of interest
 
     # sort indices for reproducible results
     img_ids = sorted(coco_api.imgs.keys())
@@ -133,6 +135,22 @@ Category ids in annotations are not in [1, #categories]! We'll apply a mapping f
     ann_keys = ["iscrowd", "bbox", "keypoints", "category_id"] + (extra_annotation_keys or [])
 
     num_instances_without_valid_segmentation = 0
+
+    if 'train' in dataset_name and cfg.PHASE == 2:
+        cls_img_dict = {i: [] for i in id_of_int}
+        for (img_dict, anno_dict_list) in imgs_anns:
+            cls_not_full = set([cls for cls, imgs in cls_img_dict.items() if len(imgs) < cfg.DATASETS.SHOT])
+            if not cls_not_full:
+                break
+            img_cls = set([x["category_id"] for x in anno_dict_list])
+            selectable_cls = list(img_cls & cls_not_full)
+            if not selectable_cls:
+                continue
+            cls_selected = random.choice(selectable_cls)
+            cls_img_dict[cls_selected].append((img_dict, anno_dict_list))
+        imgs_anns = list(itertools.chain.from_iterable(cls_img_dict.values()))
+        logger.info("Randomly selecting {} images in COCO format from {} for {} shot setting".
+                    format(len(imgs_anns), json_file, cfg.DATASETS.SHOT))
 
     for (img_dict, anno_dict_list) in imgs_anns:
         record = {}

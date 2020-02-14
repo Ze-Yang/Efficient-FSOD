@@ -122,10 +122,11 @@ def do_train(cfg, model, resume=False):
     scheduler = build_lr_scheduler(cfg, optimizer)
 
     checkpointer = DetectionCheckpointer(
-        model, cfg.OUTPUT_DIR, optimizer=optimizer, scheduler=scheduler
+        model, cfg.OUTPUT_DIR, cfg.PHASE, optimizer=optimizer, scheduler=scheduler
     )
     start_iter = (
-        checkpointer.resume_or_load(cfg.MODEL.WEIGHTS, resume=resume).get("iteration", -1) + 1
+        checkpointer.resume_or_load(cfg.LOAD_FILE, resume=True).get("iteration", -1) + 1 if cfg.PHASE == 2 \
+        else checkpointer.resume_or_load(cfg.MODEL.WEIGHTS, resume=resume).get("iteration", -1) + 1
     )
     max_iter = cfg.SOLVER.MAX_ITER
 
@@ -203,7 +204,7 @@ def main(args):
     logger.info("Model:\n{}".format(model))
     if args.eval_only:
         DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
-            cfg.MODEL.WEIGHTS, resume=args.resume
+            cfg.MODEL.WEIGHTS, resume=True
         )
         return do_test(cfg, model)
 
@@ -213,7 +214,7 @@ def main(args):
             model, device_ids=[comm.get_local_rank()], broadcast_buffers=False
         )
 
-    do_train(cfg, model)
+    do_train(cfg, model, resume=args.resume)
     return do_test(cfg, model)
 
 

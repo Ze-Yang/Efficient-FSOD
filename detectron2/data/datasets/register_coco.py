@@ -29,7 +29,7 @@ def register_coco_instances(name, metadata, json_file, image_root):
         image_root (str): directory which contains all the images.
     """
     # 1. register a function which returns dicts
-    DatasetCatalog.register(name, lambda: load_coco_json(json_file, image_root, name))
+    DatasetCatalog.register(name, lambda cfg=None: load_coco_json(cfg, json_file, image_root, name))
 
     # 2. Optionally, add metadata about this dataset,
     # since they might be useful in evaluation, visualization or logging
