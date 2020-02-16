@@ -43,6 +43,7 @@ from detectron2.evaluation import (
     SemSegEvaluator,
     inference_on_dataset,
     print_csv_format,
+    inference_context
 )
 from detectron2.modeling import build_model
 from detectron2.solver import build_lr_scheduler, build_optimizer

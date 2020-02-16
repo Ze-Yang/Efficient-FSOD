@@ -41,6 +41,7 @@ class FastRCNNConvFCHead(nn.Module):
         # fmt: on
         assert num_conv + num_fc > 0
 
+        self.flat_dim = 2 if cfg.METHOD == 'ours' and cfg.PHASE == 2 else 1
         self._output_size = (input_shape.channels, input_shape.height, input_shape.width)
 
         self.conv_norm_relus = []
@@ -75,7 +76,7 @@ class FastRCNNConvFCHead(nn.Module):
             x = layer(x)
         if len(self.fcs):
             if x.dim() > 2:
-                x = torch.flatten(x, start_dim=1)
+                x = torch.flatten(x, start_dim=self.flat_dim)
             for layer in self.fcs:
                 x = F.relu(layer(x))
         return x

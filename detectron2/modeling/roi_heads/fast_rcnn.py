@@ -319,7 +319,7 @@ class FastRCNNOutputLayers(nn.Module):
       (2) classification scores
     """
 
-    def __init__(self, input_size, num_classes, cls_agnostic_bbox_reg, box_dim=4):
+    def __init__(self, input_size, num_classes, cls_agnostic_bbox_reg, box_dim=4, reweight=False):
         """
         Args:
             input_size (int): channels, or (channels, height, width)
@@ -335,9 +335,11 @@ class FastRCNNOutputLayers(nn.Module):
 
         # The prediction layer for num_classes foreground classes and one background class
         # (hence + 1)
-        self.cls_score = nn.Linear(input_size, num_classes + 1)
-        num_bbox_reg_classes = 1 if cls_agnostic_bbox_reg else num_classes
+        self.cls_score = nn.Linear(input_size, 1) if reweight else \
+            nn.Linear(input_size, num_classes + 1)
+        num_bbox_reg_classes = 1 if cls_agnostic_bbox_reg or reweight else num_classes
         self.bbox_pred = nn.Linear(input_size, num_bbox_reg_classes * box_dim)
+        self.reweight = reweight
 
         nn.init.normal_(self.cls_score.weight, std=0.01)
         nn.init.normal_(self.bbox_pred.weight, std=0.001)
@@ -345,8 +347,9 @@ class FastRCNNOutputLayers(nn.Module):
             nn.init.constant_(l.bias, 0)
 
     def forward(self, x):
-        if x.dim() > 2:
+        if x.dim() > 2 and not self.reweight:
             x = torch.flatten(x, start_dim=1)
-        scores = self.cls_score(x)
-        proposal_deltas = self.bbox_pred(x)
+        scores = self.cls_score(x).squeeze(-1) if self.reweight else self.cls_score(x)
+        proposal_deltas = self.bbox_pred(x).view(self.bbox_pred(x).shape[0], -1) \
+            if self.reweight else self.bbox_pred(x)
         return scores, proposal_deltas

@@ -555,6 +555,8 @@ _C.TEST.PRECISE_BN.NUM_ITER = 200
 # ---------------------------------------------------------------------------- #
 # 1 for pre-training, 2 for fine-tuning
 _C.PHASE = 1
+# 'ft' for fine tuning, 'ours' for our method
+_C.METHOD = ''
 # Directory where output files are written
 _C.OUTPUT_DIR = "./output"
 # Directory where output files are written

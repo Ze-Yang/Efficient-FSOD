@@ -5,21 +5,13 @@ MODEL:
   RESNETS:
     DEPTH: 50
   ROI_BOX_HEAD:
-    CLS_AGNOSTIC_BBOX_REG: True
+    CLS_AGNOSTIC_BBOX_REG: False
   ROI_MASK_HEAD:
     CLS_AGNOSTIC_MASK: True
-
-
   ROI_HEADS:
     NUM_CLASSES: 60
 DATASETS:
   TRAIN: ('coco_2017_train_nonvoc_split',)
   TEST: ('coco_2017_val_nonvoc_split',)
-
-DATALOADER:
-  NUM_WORKERS: 1
-
-
-
 OUTPUT_DIR:
-  ./results/COCO60_pretrain
+  ./results/test

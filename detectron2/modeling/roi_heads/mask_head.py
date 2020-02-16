@@ -155,6 +155,8 @@ class MaskRCNNConvUpsampleHead(nn.Module):
         num_conv          = cfg.MODEL.ROI_MASK_HEAD.NUM_CONV
         input_channels    = input_shape.channels
         cls_agnostic_mask = cfg.MODEL.ROI_MASK_HEAD.CLS_AGNOSTIC_MASK
+        # cls_agnostic_mask = True if cfg.METHOD == 'ours' and cfg.PHASE == 2\
+        #     else cfg.MODEL.ROI_MASK_HEAD.CLS_AGNOSTIC_MASK
         # fmt: on
 
         self.conv_norm_relus = []
@@ -192,10 +194,17 @@ class MaskRCNNConvUpsampleHead(nn.Module):
             nn.init.constant_(self.predictor.bias, 0)
 
     def forward(self, x):
+        # if x.dim() > 4:
+        #     reshape = True
+        #     shape = x.shape
+        #     x = x.view(-1, shape[-3], shape[-2], shape[-1])
         for layer in self.conv_norm_relus:
             x = layer(x)
         x = F.relu(self.deconv(x))
-        return self.predictor(x)
+        x = self.predictor(x)
+        # if reshape is True:
+        #     x.view(shape[0], shape[1], -1, -1, -1)
+        return x
 
 
 def build_mask_head(cfg, input_shape):
