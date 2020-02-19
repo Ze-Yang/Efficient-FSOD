@@ -767,11 +767,13 @@ class ReweightedROIHeads(StandardROIHeads):
         See :class:`ROIHeads.forward`.
         """
         del images
+        features_list = [features[f] for f in self.in_features]
         if self.training:
             proposals = self.label_and_sample_proposals(proposals, targets)
+        else:
+            if targets is not None:  # for reweight parameters initialization
+                return self._init_reweight(features_list, targets)
         del targets
-
-        features_list = [features[f] for f in self.in_features]
 
         if self.training:
             losses = self._forward_box(features_list, proposals)
@@ -786,6 +788,15 @@ class ReweightedROIHeads(StandardROIHeads):
             # applied to the top scoring box detections.
             pred_instances = self.forward_with_given_boxes(features, pred_instances)
             return pred_instances, {}
+
+    def _init_reweight(self, features, targets):
+        box_features = self.box_pooler(features, [x.gt_boxes for x in targets])
+        box_features = nn.functional.avg_pool2d(box_features, self.box_pooler.output_size).squeeze()
+        gt_classes = torch.cat([x.gt_classes for x in targets], dim=0).tolist()
+        cls_dict = {i: [] for i in range(self.num_classes)}
+        for i in range(len(gt_classes)):
+            cls_dict[gt_classes[i]].append(box_features[i])
+        return cls_dict
 
     def _forward_box(self, features, proposals):
         """
@@ -828,35 +839,3 @@ class ReweightedROIHeads(StandardROIHeads):
                 self.test_score_thresh, self.test_nms_thresh, self.test_detections_per_img
             )
             return pred_instances
-
-    # def _forward_mask(self, features, instances):
-    #     """
-    #     Forward logic of the mask prediction branch.
-    #
-    #     Args:
-    #         features (list[Tensor]): #level input features for mask prediction
-    #         instances (list[Instances]): the per-image instances to train/predict masks.
-    #             In training, they can be the proposals.
-    #             In inference, they can be the predicted boxes.
-    #
-    #     Returns:
-    #         In training, a dict of losses.
-    #         In inference, update `instances` with new fields "pred_masks" and return it.
-    #     """
-    #     if not self.mask_on:
-    #         return {} if self.training else instances
-    #
-    #     if self.training:
-    #         # The loss is only defined on positive proposals.
-    #         proposals, _ = select_foreground_proposals(instances, self.num_classes)
-    #         proposal_boxes = [x.proposal_boxes for x in proposals]
-    #         mask_features = self.mask_pooler(features, proposal_boxes)
-    #         mask_features = self.reweight.weight[:, :, None, None] * mask_features.unsqueeze(1)
-    #         mask_logits = self.mask_head(mask_features)
-    #         return {"loss_mask": mask_rcnn_loss(mask_logits, proposals)}
-    #     else:
-    #         pred_boxes = [x.pred_boxes for x in instances]
-    #         mask_features = self.mask_pooler(features, pred_boxes)
-    #         mask_logits = self.mask_head(mask_features)
-    #         mask_rcnn_inference(mask_logits, instances)
-    #         return instances

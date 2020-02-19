@@ -31,6 +31,7 @@ from detectron2.data import (
     MetadataCatalog,
     build_detection_test_loader,
     build_detection_train_loader,
+    build_dataloader
 )
 from detectron2.engine import default_argument_parser, default_setup, launch
 from detectron2.evaluation import (
@@ -55,6 +56,37 @@ from detectron2.utils.events import (
 )
 
 logger = logging.getLogger("detectron2")
+
+
+def init_reweight(cfg, model, data_loader):
+    """
+    Initialize reweight parameters.
+    """
+    logger.info("Initializing reweight parameters...")
+    cls_dict = {i: [] for i in range(cfg.MODEL.ROI_HEADS.NUM_CLASSES)}
+    with inference_context(model), torch.no_grad():
+        for data, _ in zip(data_loader, range(cfg.INIT_ITERS)):
+            output = model(data, init=True)
+            cls_dict = {key: cls_dict[key] + output[key] for key in cls_dict.keys()}  # per image accumulation
+
+    cls_dict = {key: torch.stack(value, dim=0) if value else torch.empty(0)
+                for key, value in cls_dict.items()}  # concat to tensor
+    dict_list = comm.all_gather(cls_dict)  # gather from all GPUs
+    cls_dict = {key: torch.cat([dict_list[i][key] for i in range(len(dict_list))], dim=0)
+                for key in cls_dict.keys()}  # concat the results
+    cls_tensor = torch.sigmoid(torch.stack([x.mean(0) for x in cls_dict.values()], dim=0))
+    cls_tensor = cls_tensor / cls_tensor.mean(1)[:, None]
+    if comm.get_world_size() > 1:
+        model.module.roi_heads.reweight.weight.data = cls_tensor
+    else:
+        model.roi_heads.reweight.weight.data = cls_tensor
+    num_cls = [value.size(0) for value in cls_dict.values()]
+    logger.info('{}'.format(num_cls))
+    del cls_dict
+    del dict_list
+    del num_cls
+    del cls_tensor
+    return None
 
 
 def get_evaluator(cfg, dataset_name, output_folder=None):
@@ -147,8 +179,19 @@ def do_train(cfg, model, resume=False):
 
     # compared to "train_net.py", we do not support accurate timing and
     # precise BN here, because they are not trivial to implement
-    data_loader = build_detection_train_loader(cfg)
+    dataset, dataset_dicts = build_detection_train_loader(cfg, get_dataset=True)
+
+    # initialize the reweight parameters
+    if cfg.PHASE == 2 and cfg.METHOD == 'ours':
+        init_reweight(cfg, model, build_dataloader(cfg, dataset, dataset_dicts))
+        if comm.get_world_size() > 1:
+            logger.info('After init: {}'.format(model.module.roi_heads.reweight.weight))
+        else:
+            logger.info('After init: {}'.format(model.roi_heads.reweight.weight))
+
+    assert model.training, 'Model.train() must be True during training.'
     logger.info("Starting training from iteration {}".format(start_iter))
+    data_loader = build_dataloader(cfg, dataset, dataset_dicts)
     with EventStorage(start_iter) as storage:
         for data, iteration in zip(data_loader, range(start_iter, max_iter)):
             iteration = iteration + 1

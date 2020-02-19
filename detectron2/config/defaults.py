@@ -561,6 +561,8 @@ _C.METHOD = ''
 _C.OUTPUT_DIR = "./output"
 # Directory where output files are written
 _C.LOAD_FILE = "./results/COCO60_pretrain/model_final.pth"
+# Number of iterations for reweight parameter initialization
+_C.INIT_ITERS = 10
 # Set seed to negative to fully randomize everything.
 # Set seed to positive to use a fixed seed. Note that a fixed seed does not
 # guarantee fully deterministic behavior.

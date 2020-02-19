@@ -80,7 +80,7 @@ class GeneralizedRCNN(nn.Module):
             vis_name = " 1. GT bounding boxes  2. Predicted proposals"
             storage.put_image(vis_name, vis_img)
 
-    def forward(self, batched_inputs):
+    def forward(self, batched_inputs, init=False):
         """
         Args:
             batched_inputs: a list, batched outputs of :class:`DatasetMapper` .
@@ -95,6 +95,7 @@ class GeneralizedRCNN(nn.Module):
 
                 * "height", "width" (int): the output resolution of the model, used in inference.
                     See :meth:`postprocess` for details.
+            init: bool, indicating whether it is initialization process.
 
         Returns:
             list[dict]:
@@ -104,7 +105,7 @@ class GeneralizedRCNN(nn.Module):
                     "pred_boxes", "pred_classes", "scores", "pred_masks", "pred_keypoints"
         """
         if not self.training:
-            return self.inference(batched_inputs)
+            return self.inference(batched_inputs, init=init)
 
         images = self.preprocess_image(batched_inputs)
         if "instances" in batched_inputs[0]:
@@ -137,7 +138,7 @@ class GeneralizedRCNN(nn.Module):
         losses.update(proposal_losses)
         return losses
 
-    def inference(self, batched_inputs, detected_instances=None, do_postprocess=True):
+    def inference(self, batched_inputs, detected_instances=None, do_postprocess=True, init=False):
         """
         Run inference on the given inputs.
 
@@ -150,7 +151,7 @@ class GeneralizedRCNN(nn.Module):
                 The inference will then skip the detection of bounding boxes,
                 and only predict other per-ROI outputs.
             do_postprocess (bool): whether to apply post-processing on the outputs.
-
+            init (bool): indicating whether it is initialization process.
         Returns:
             same as in :meth:`forward`.
         """
@@ -160,13 +161,24 @@ class GeneralizedRCNN(nn.Module):
         features = self.backbone(images.tensor)
 
         if detected_instances is None:
-            if self.proposal_generator:
-                proposals, _ = self.proposal_generator(images, features, None)
+            if init:
+                if "instances" in batched_inputs[0]:
+                    gt_instances = [x["instances"].to(self.device) for x in batched_inputs]
+                elif "targets" in batched_inputs[0]:
+                    log_first_n(
+                        logging.WARN, "'targets' in the model inputs is now renamed to 'instances'!", n=10
+                    )
+                    gt_instances = [x["targets"].to(self.device) for x in batched_inputs]
+                else:
+                    gt_instances = None
+                return self.roi_heads(images, features, None, gt_instances)
             else:
-                assert "proposals" in batched_inputs[0]
-                proposals = [x["proposals"].to(self.device) for x in batched_inputs]
-
-            results, _ = self.roi_heads(images, features, proposals, None)
+                if self.proposal_generator:
+                    proposals, _ = self.proposal_generator(images, features, None)
+                else:
+                    assert "proposals" in batched_inputs[0]
+                    proposals = [x["proposals"].to(self.device) for x in batched_inputs]
+                results, _ = self.roi_heads(images, features, proposals, None)
         else:
             detected_instances = [x.to(self.device) for x in detected_instances]
             results = self.roi_heads.forward_with_given_boxes(features, detected_instances)

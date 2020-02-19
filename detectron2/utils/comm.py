@@ -96,6 +96,8 @@ def _serialize_to_tensor(data, group):
     assert backend in ["gloo", "nccl"]
     device = torch.device("cpu" if backend == "gloo" else "cuda")
 
+    if isinstance(data, dict):
+        data = {key: value.to(device=device) for key, value in data.items()}
     buffer = pickle.dumps(data)
     if len(buffer) > 1024 ** 3:
         logger = logging.getLogger(__name__)
@@ -155,6 +157,9 @@ def all_gather(data, group=None):
     if dist.get_world_size(group) == 1:
         return [data]
 
+    if isinstance(data, dict):
+        assert all([torch.is_tensor(x) for x in data.values()]), \
+            'The value of the dict to be gather should be Tensor.'
     tensor = _serialize_to_tensor(data, group)
 
     size_list, tensor = _pad_to_largest_tensor(tensor, group)
@@ -169,7 +174,11 @@ def all_gather(data, group=None):
     data_list = []
     for size, tensor in zip(size_list, tensor_list):
         buffer = tensor.cpu().numpy().tobytes()[:size]
-        data_list.append(pickle.loads(buffer))
+        data = pickle.loads(buffer)
+        if isinstance(data, dict):
+            data_list.append({key: value.to(device='cuda') for key, value in data.items()})
+        else:
+            data_list.append(data)
 
     return data_list
 
