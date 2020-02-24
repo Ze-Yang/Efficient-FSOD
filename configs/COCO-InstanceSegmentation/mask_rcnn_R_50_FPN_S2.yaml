@@ -39,4 +39,4 @@ LOAD_FILE:
 #  ./results/nonvoc2voc/model_final.pth
 OUTPUT_DIR:
 #  ./results/fewshot/test
-  ./results/fewshot/voc_ours_5shot_2
+  ./results/fewshot/voc_ours_5shot_3

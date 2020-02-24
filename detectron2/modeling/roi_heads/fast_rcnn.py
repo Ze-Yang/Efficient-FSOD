@@ -174,6 +174,7 @@ class FastRCNNOutputs(object):
         bg_class_ind = self.pred_class_logits.shape[1] - 1
 
         fg_inds = (self.gt_classes >= 0) & (self.gt_classes < bg_class_ind)
+        incorrect = pred_classes != self.gt_classes
         num_fg = fg_inds.nonzero().numel()
         fg_gt_classes = self.gt_classes[fg_inds]
         fg_pred_classes = pred_classes[fg_inds]
@@ -181,12 +182,15 @@ class FastRCNNOutputs(object):
         num_false_negative = (fg_pred_classes == bg_class_ind).nonzero().numel()
         num_accurate = (pred_classes == self.gt_classes).nonzero().numel()
         fg_num_accurate = (fg_pred_classes == fg_gt_classes).nonzero().numel()
+        bg_num_incorrect = (incorrect & ~fg_inds).nonzero().numel()
 
         storage = get_event_storage()
         storage.put_scalar("fast_rcnn/cls_accuracy", num_accurate / num_instances)
+        storage.put_scalar("fast_rcnn/false_positive", bg_num_incorrect / (num_instances - num_fg))
         if num_fg > 0:
             storage.put_scalar("fast_rcnn/fg_cls_accuracy", fg_num_accurate / num_fg)
             storage.put_scalar("fast_rcnn/false_negative", num_false_negative / num_fg)
+            storage.put_scalar("fast_rcnn/fg_err_rate", 1 - (num_false_negative + fg_num_accurate) / num_fg)
 
     def softmax_cross_entropy_loss(self):
         """
@@ -275,10 +279,10 @@ class FastRCNNOutputs(object):
                 the number of predicted objects for image i and B is the box dimension (4 or 5)
         """
         num_pred = len(self.proposals)
-        B = self.proposals.tensor.shape[1]
-        K = self.pred_proposal_deltas.shape[1] // B
+        B = self.proposals.tensor.shape[1]  # proposals[1000, 4]
+        K = self.pred_proposal_deltas.shape[1] // B  # pred_proposal[1000, 80]
         boxes = self.box2box_transform.apply_deltas(
-            self.pred_proposal_deltas.view(num_pred * K, B),
+            self.pred_proposal_deltas.reshape(num_pred * K, B),
             self.proposals.tensor.unsqueeze(1).expand(num_pred, K, B).reshape(-1, B),
         )
         return boxes.view(num_pred, K * B).split(self.num_preds_per_image, dim=0)
@@ -327,6 +331,7 @@ class FastRCNNOutputLayers(nn.Module):
             cls_agnostic_bbox_reg (bool): whether to use class agnostic for bbox regression
             box_dim (int): the dimension of bounding boxes.
                 Example box dimensions: 4 for regular XYXY boxes and 5 for rotated XYWHA boxes
+            reweight (bool): whether reweight or not.
         """
         super(FastRCNNOutputLayers, self).__init__()
 
@@ -340,6 +345,7 @@ class FastRCNNOutputLayers(nn.Module):
         num_bbox_reg_classes = 1 if cls_agnostic_bbox_reg or reweight else num_classes
         self.bbox_pred = nn.Linear(input_size, num_bbox_reg_classes * box_dim)
         self.reweight = reweight
+        self.num_classes = num_classes
 
         nn.init.normal_(self.cls_score.weight, std=0.01)
         nn.init.normal_(self.bbox_pred.weight, std=0.001)
@@ -350,6 +356,6 @@ class FastRCNNOutputLayers(nn.Module):
         if x.dim() > 2 and not self.reweight:
             x = torch.flatten(x, start_dim=1)
         scores = self.cls_score(x).squeeze(-1) if self.reweight else self.cls_score(x)
-        proposal_deltas = self.bbox_pred(x).view(self.bbox_pred(x).shape[0], -1) \
+        proposal_deltas = self.bbox_pred(x)[:, :self.num_classes].view(self.bbox_pred(x).shape[0], -1) \
             if self.reweight else self.bbox_pred(x)
         return scores, proposal_deltas

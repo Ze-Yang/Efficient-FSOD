@@ -813,16 +813,22 @@ class ReweightedROIHeads(StandardROIHeads):
             In training, a dict of losses.
             In inference, a list of `Instances`, the predicted instances.
         """
-        box_features = self.box_pooler(features, [x.proposal_boxes for x in proposals])
-        box_features = self.reweight.weight[:, :, None, None] * box_features.unsqueeze(1)
+        box_features = self.box_pooler(features, [x.proposal_boxes for x in proposals])  # [2*512, 256, 7 ,7]
+
+        assert self.reweight.weight.dim() == 2, 'The dim of reweight parameters should be 2.'
+        weight = torch.cat([self.reweight.weight,
+                            torch.ones((1, self.reweight.weight.size(1)),
+                                       device=self.reweight.weight.device)], dim=0
+                           )
+        box_features = weight[:, :, None, None] * box_features.unsqueeze(1)
         box_features = self.box_head(box_features)
         pred_class_logits, pred_proposal_deltas = self.box_predictor(box_features)
         del box_features
 
-        objectness_logits = torch.cat([p.objectness_logits for p in proposals], dim=0)
-        bg_logits = torch.log(torch.exp(pred_class_logits).sum(dim=1, keepdim=True))
-        fg_logits = objectness_logits[:, None] + pred_class_logits
-        pred_class_logits = torch.cat([fg_logits, bg_logits], dim=1)
+        # objectness_logits = torch.cat([p.objectness_logits for p in proposals], dim=0)
+        # bg_logits = torch.log(torch.exp(pred_class_logits).sum(dim=1, keepdim=True))
+        # fg_logits = objectness_logits[:, None] + pred_class_logits
+        # pred_class_logits = torch.cat([fg_logits, bg_logits], dim=1)
 
         outputs = FastRCNNOutputs(
             self.box2box_transform,

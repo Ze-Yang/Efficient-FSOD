@@ -4,6 +4,7 @@ import numpy as np
 import os
 from itertools import chain
 import cv2
+import matplotlib.pyplot as plt
 import tqdm
 from PIL import Image
 
@@ -13,6 +14,7 @@ from detectron2.data import detection_utils as utils
 from detectron2.data.build import filter_images_with_few_keypoints
 from detectron2.utils.logger import setup_logger
 from detectron2.utils.visualizer import Visualizer
+from detectron2.utils.env import seed_all_rng
 
 
 def setup(args):
@@ -21,6 +23,8 @@ def setup(args):
         cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
     cfg.freeze()
+    # make sure each worker has a different, yet deterministic seed if specified
+    seed_all_rng(None if cfg.SEED < 0 else cfg.SEED)
     return cfg
 
 
@@ -57,8 +61,10 @@ if __name__ == "__main__":
     def output(vis, fname):
         if args.show:
             print(fname)
-            cv2.imshow("window", vis.get_image()[:, :, ::-1])
-            cv2.waitKey()
+            plt.imshow(vis.get_image())
+            plt.show()
+            # cv2.imshow("window", vis.get_image()[:, :, ::-1])
+            # cv2.waitKey()
         else:
             filepath = os.path.join(dirname, fname)
             print("Saving to {} ...".format(filepath))
@@ -87,7 +93,7 @@ if __name__ == "__main__":
                 )
                 output(vis, str(per_image["image_id"]) + ".jpg")
     else:
-        dicts = list(chain.from_iterable([DatasetCatalog.get(k) for k in cfg.DATASETS.TRAIN]))
+        dicts = list(chain.from_iterable([DatasetCatalog.get(k)(cfg) for k in cfg.DATASETS.TRAIN]))
         if cfg.MODEL.KEYPOINT_ON:
             dicts = filter_images_with_few_keypoints(dicts, 1)
         for dic in tqdm.tqdm(dicts):

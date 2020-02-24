@@ -23,6 +23,7 @@ import os
 from collections import OrderedDict
 import torch
 from torch.nn.parallel import DistributedDataParallel
+from visualize_reweight import tensor_display
 
 import detectron2.utils.comm as comm
 from detectron2.checkpoint import DetectionCheckpointer, PeriodicCheckpointer
@@ -188,6 +189,8 @@ def do_train(cfg, model, resume=False):
             logger.info('After init: {}'.format(model.module.roi_heads.reweight.weight))
         else:
             logger.info('After init: {}'.format(model.roi_heads.reweight.weight))
+    # tensor_display(model.roi_heads.reweight.weight.data)
+    # exit(0)
 
     assert model.training, 'Model.train() must be True during training.'
     logger.info("Starting training from iteration {}".format(start_iter))
