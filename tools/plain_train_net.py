@@ -78,9 +78,12 @@ def init_reweight(cfg, model, data_loader):
     cls_tensor = torch.sigmoid(torch.stack([x.mean(0) for x in cls_dict.values()], dim=0))
     cls_tensor = cls_tensor / cls_tensor.mean(1)[:, None]
     if comm.get_world_size() > 1:
-        model.module.roi_heads.reweight.weight.data = cls_tensor
+        model.module.roi_heads.reweight.weight.data = cls_tensor if cfg.MODEL.MASK_ON else cls_tensor[15:]
+        # model.module.roi_heads.reweight.weight.data = cls_tensor
     else:
-        model.roi_heads.reweight.weight.data = cls_tensor
+        model.roi_heads.reweight.weight.data = cls_tensor if cfg.MODEL.MASK_ON else cls_tensor[15:]
+        # model.roi_heads.reweight.weight.data = cls_tensor
+
     num_cls = [value.size(0) for value in cls_dict.values()]
     logger.info('{}'.format(num_cls))
     del cls_dict

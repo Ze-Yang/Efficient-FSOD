@@ -12,8 +12,11 @@ MODEL:
     CLS_AGNOSTIC_MASK: True
   ROI_HEADS:
     NUM_CLASSES: 20
-    NAME: 'ReweightedROIHeads'
-
+    NAME: 'ReweightedROIHeads_Tf'
+DATASETS:
+  TRAIN: ('coco_2017_train_voc_split',)
+  TEST: ('coco_2017_val_voc_split',)
+  SHOT: 5
 SOLVER:
   STEPS: (600, 800)
   WARMUP_ITERS: 50
@@ -28,10 +31,7 @@ SOLVER:
 PHASE: 2
 METHOD: 'ours'
 INIT_ITERS: 50
-DATASETS:
-  TRAIN: ('coco_2017_train_voc_split',)
-  TEST: ('coco_2017_val_voc_split',)
-  SHOT: 5
+
 #DATALOADER:
 #  NUM_WORKERS: 1
 LOAD_FILE:

@@ -17,7 +17,7 @@ from ..poolers import ROIPooler
 from ..proposal_generator.proposal_utils import add_ground_truth_to_proposals
 from ..sampling import subsample_labels
 from .box_head import build_box_head
-from .fast_rcnn import FastRCNNOutputLayers, FastRCNNOutputs
+from .fast_rcnn import FastRCNNOutputLayers_Incre, FastRCNNOutputLayers, FastRCNNOutputs
 from .keypoint_head import build_keypoint_head, keypoint_rcnn_inference, keypoint_rcnn_loss
 from .mask_head import build_mask_head, mask_rcnn_inference, mask_rcnn_loss
 
@@ -716,9 +716,9 @@ class StandardROIHeads(ROIHeads):
 
 
 @ROI_HEADS_REGISTRY.register()
-class ReweightedROIHeads(StandardROIHeads):
+class ReweightedROIHeads_Tf(StandardROIHeads):
     def __init__(self, cfg, input_shape):
-        super(ReweightedROIHeads, self).__init__(cfg, input_shape)
+        super(ReweightedROIHeads_Tf, self).__init__(cfg, input_shape)
         self._init_reweight_layer()
 
     def _init_box_head(self, cfg):
@@ -819,6 +819,138 @@ class ReweightedROIHeads(StandardROIHeads):
         weight = torch.cat([self.reweight.weight,
                             torch.ones((1, self.reweight.weight.size(1)),
                                        device=self.reweight.weight.device)], dim=0
+                           )
+        box_features = weight[:, :, None, None] * box_features.unsqueeze(1)
+        box_features = self.box_head(box_features)
+        pred_class_logits, pred_proposal_deltas = self.box_predictor(box_features)
+        del box_features
+
+        # objectness_logits = torch.cat([p.objectness_logits for p in proposals], dim=0)
+        # bg_logits = torch.log(torch.exp(pred_class_logits).sum(dim=1, keepdim=True))
+        # fg_logits = objectness_logits[:, None] + pred_class_logits
+        # pred_class_logits = torch.cat([fg_logits, bg_logits], dim=1)
+
+        outputs = FastRCNNOutputs(
+            self.box2box_transform,
+            pred_class_logits,
+            pred_proposal_deltas,
+            proposals,
+            self.smooth_l1_beta,
+        )
+
+        if self.training:
+            return outputs.losses()
+        else:
+            pred_instances, _ = outputs.inference(
+                self.test_score_thresh, self.test_nms_thresh, self.test_detections_per_img
+            )
+            return pred_instances
+
+
+@ROI_HEADS_REGISTRY.register()
+class ReweightedROIHeads_Incre(StandardROIHeads):
+    def __init__(self, cfg, input_shape):
+        super(ReweightedROIHeads_Incre, self).__init__(cfg, input_shape)
+        self._init_reweight_layer()
+
+    def _init_box_head(self, cfg):
+        # fmt: off
+        pooler_resolution = cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
+        pooler_scales     = tuple(1.0 / self.feature_strides[k] for k in self.in_features)
+        sampling_ratio    = cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO
+        pooler_type       = cfg.MODEL.ROI_BOX_HEAD.POOLER_TYPE
+        # fmt: on
+
+        # If StandardROIHeads is applied on multiple feature maps (as in FPN),
+        # then we share the same predictors and therefore the channel counts must be the same
+        in_channels = [self.feature_channels[f] for f in self.in_features]
+        # Check all channel counts are equal
+        assert len(set(in_channels)) == 1, in_channels
+        in_channels = in_channels[0]
+
+        self.box_pooler = ROIPooler(
+            output_size=pooler_resolution,
+            scales=pooler_scales,
+            sampling_ratio=sampling_ratio,
+            pooler_type=pooler_type,
+        )
+        # Here we split "box head" and "box predictor", which is mainly due to historical reasons.
+        # They are used together so the "box predictor" layers should be part of the "box head".
+        # New subclasses of ROIHeads do not need "box predictor"s.
+        self.box_head = build_box_head(
+            cfg, ShapeSpec(channels=in_channels, height=pooler_resolution, width=pooler_resolution)
+        )
+        self.box_predictor = FastRCNNOutputLayers_Incre(
+            self.box_head.output_size, self.num_classes, self.cls_agnostic_bbox_reg, reweight=True
+        )
+
+    def _init_reweight_layer(self):
+        # If StandardROIHeads is applied on multiple feature maps (as in FPN),
+        # then we share the same predictors and therefore the channel counts must be the same
+        in_channels = [self.feature_channels[f] for f in self.in_features]
+        # Check all channel counts are equal
+        assert len(set(in_channels)) == 1, in_channels
+        in_channels = in_channels[0]
+        self.reweight = torch.nn.Linear(in_channels, 5, bias=False)
+        nn.init.kaiming_normal_(self.reweight.weight, mode="fan_out", nonlinearity="relu")
+
+    def forward(self, images, features, proposals, targets=None):
+        """
+        See :class:`ROIHeads.forward`.
+        """
+        del images
+        features_list = [features[f] for f in self.in_features]
+        if self.training:
+            proposals = self.label_and_sample_proposals(proposals, targets)
+        else:
+            if targets is not None:  # for reweight parameters initialization
+                return self._init_reweight(features_list, targets)
+        del targets
+
+        if self.training:
+            losses = self._forward_box(features_list, proposals)
+            # During training the proposals used by the box head are
+            # used by the mask, keypoint (and densepose) heads.
+            losses.update(self._forward_mask(features_list, proposals))
+            losses.update(self._forward_keypoint(features_list, proposals))
+            return proposals, losses
+        else:
+            pred_instances = self._forward_box(features_list, proposals)
+            # During inference cascaded prediction is used: the mask and keypoints heads are only
+            # applied to the top scoring box detections.
+            pred_instances = self.forward_with_given_boxes(features, pred_instances)
+            return pred_instances, {}
+
+    def _init_reweight(self, features, targets):
+        box_features = self.box_pooler(features, [x.gt_boxes for x in targets])
+        box_features = nn.functional.avg_pool2d(box_features, self.box_pooler.output_size).squeeze()
+        gt_classes = torch.cat([x.gt_classes for x in targets], dim=0).tolist()
+        cls_dict = {i: [] for i in range(self.num_classes)}
+        for i in range(len(gt_classes)):
+            cls_dict[gt_classes[i]].append(box_features[i])
+        return cls_dict
+
+    def _forward_box(self, features, proposals):
+        """
+        Forward logic of the box prediction branch.
+
+        Args:
+            features (list[Tensor]): #level input features for box prediction
+            proposals (list[Instances]): the per-image object proposals with
+                their matching ground truth.
+                Each has fields "proposal_boxes", and "objectness_logits",
+                "gt_classes", "gt_boxes".
+
+        Returns:
+            In training, a dict of losses.
+            In inference, a list of `Instances`, the predicted instances.
+        """
+        box_features = self.box_pooler(features, [x.proposal_boxes for x in proposals])  # [2*512, 256, 7 ,7]
+
+        assert self.reweight.weight.dim() == 2, 'The dim of reweight parameters should be 2.'
+        weight = torch.cat([torch.ones((1, self.reweight.weight.size(1)), device=self.reweight.weight.device),
+                            self.reweight.weight],
+                           dim=0
                            )
         box_features = weight[:, :, None, None] * box_features.unsqueeze(1)
         box_features = self.box_head(box_features)

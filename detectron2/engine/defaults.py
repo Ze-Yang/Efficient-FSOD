@@ -65,6 +65,7 @@ def default_argument_parser():
     parser.add_argument(
         "--machine-rank", type=int, default=0, help="the rank of this machine (unique per machine)"
     )
+    parser.add_argument("--retest", action="store_true", help="test using the saved results")
 
     # PyTorch still may leave orphan processes in multi-gpu training.
     # Therefore we use a deterministic way to obtain port,
@@ -259,6 +260,7 @@ class DefaultTrainer(SimpleTrainer):
             # Assume you want to save checkpoints together with logs/statistics
             model,
             cfg.OUTPUT_DIR,
+            cfg.PHASE,
             optimizer=optimizer,
             scheduler=self.scheduler,
         )
@@ -279,8 +281,11 @@ class DefaultTrainer(SimpleTrainer):
         """
         # The checkpoint stores the training iteration that just finished, thus we start
         # at the next iteration (or iter zero if there's no checkpoint).
+        ### TODO
         self.start_iter = (
-            self.checkpointer.resume_or_load(self.cfg.MODEL.WEIGHTS, resume=resume).get(
+            self.checkpointer.resume_or_load(self.cfg.LOAD_FILE, resume=True).get("iteration", -1) + 1
+            if self.cfg.PHASE == 2
+            else self.checkpointer.resume_or_load(self.cfg.MODEL.WEIGHTS, resume=resume).get(
                 "iteration", -1
             )
             + 1

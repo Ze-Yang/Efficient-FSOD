@@ -359,3 +359,52 @@ class FastRCNNOutputLayers(nn.Module):
         proposal_deltas = self.bbox_pred(x)[:, :self.num_classes].view(self.bbox_pred(x).shape[0], -1) \
             if self.reweight else self.bbox_pred(x)
         return scores, proposal_deltas
+
+
+class FastRCNNOutputLayers_Incre(nn.Module):
+    """
+    Two linear layers for predicting Fast R-CNN outputs:
+      (1) proposal-to-detection box regression deltas
+      (2) classification scores
+    """
+
+    def __init__(self, input_size, num_classes, cls_agnostic_bbox_reg, box_dim=4, reweight=False):
+        """
+        Args:
+            input_size (int): channels, or (channels, height, width)
+            num_classes (int): number of foreground classes
+            cls_agnostic_bbox_reg (bool): whether to use class agnostic for bbox regression
+            box_dim (int): the dimension of bounding boxes.
+                Example box dimensions: 4 for regular XYXY boxes and 5 for rotated XYWHA boxes
+            reweight (bool): whether reweight or not.
+        """
+        super(FastRCNNOutputLayers_Incre, self).__init__()
+
+        if not isinstance(input_size, int):
+            input_size = np.prod(input_size)
+
+        # The prediction layer for num_classes foreground classes and one background class
+        # (hence + 1)
+        self.cls_score = nn.Linear(input_size, 16)
+        self.cls_score_noval = nn.Linear(input_size, 1)
+        num_bbox_reg_classes = 1 if cls_agnostic_bbox_reg or reweight else num_classes
+        self.bbox_pred = nn.Linear(input_size, num_bbox_reg_classes * box_dim)
+        self.reweight = reweight
+        self.num_classes = num_classes
+
+        nn.init.normal_(self.cls_score.weight, std=0.01)
+        nn.init.normal_(self.bbox_pred.weight, std=0.001)
+        for l in [self.cls_score, self.bbox_pred]:
+            nn.init.constant_(l.bias, 0)
+
+    def forward(self, x):
+        if x.dim() > 2 and not self.reweight:
+            x = torch.flatten(x, start_dim=1)
+        base_bg_score = self.cls_score(x[:, 0])
+        noval_score = self.cls_score_noval(x[:, 1:]).squeeze()
+        scores = torch.cat([base_bg_score[:, :15], noval_score, base_bg_score[:, -1][:, None]], dim=1)
+        base_proposal_deltas = self.bbox_pred(x[:, 0].unsqueeze(1)).\
+            expand(self.bbox_pred(x).shape[0], 15, -1).reshape(self.bbox_pred(x).shape[0], -1)
+        noval_proposal_deltas = self.bbox_pred(x[:, 1:]).reshape(self.bbox_pred(x).shape[0], -1)
+        proposal_deltas = torch.cat([base_proposal_deltas, noval_proposal_deltas], dim=1)
+        return scores, proposal_deltas

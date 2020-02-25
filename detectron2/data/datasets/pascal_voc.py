@@ -51,8 +51,14 @@ def load_voc_instances(cfg, dirname: str, split: str):
         dirname: Contain "Annotations", "ImageSets", "JPEGImages"
         split (str): one of "train", "test", "val", "trainval"
     """
-    with PathManager.open(os.path.join(dirname, "ImageSets", "Main", split + ".txt")) as f:
-        fileids = np.loadtxt(f, dtype=np.str)
+    if 'train' in split and cfg.PHASE == 2:
+        fileids = []
+        for cls_name in CLASS_NAMES[cfg.SPLIT]:
+            with PathManager.open(os.path.join(dirname, "ImageSets", "Main", "1_box", cls_name + ".txt")) as f:
+                fileids.extend(np.loadtxt(f, dtype=np.str)[:cfg.DATASETS.SHOT])
+    else:
+        with PathManager.open(os.path.join(dirname, "ImageSets", "Main", split + ".txt")) as f:
+            fileids = np.loadtxt(f, dtype=np.str)
 
     dicts = []
     for fileid in fileids:
@@ -94,10 +100,11 @@ def load_voc_instances(cfg, dirname: str, split: str):
 
 def register_pascal_voc(name, dirname, split, year):
     DatasetCatalog.register(name, lambda cfg=None: load_voc_instances(cfg, dirname, split))
-    if 'split' in name:
-        cls_split = int(name.split('_')[-1][-1])
-    else:
-        cls_split = 0
+    # if 'split' in name:
+    #     cls_split = int(name.split('_')[-1][-1])
+    # else:
+    #     cls_split = 0
+    cls_split = 1
     MetadataCatalog.get(name).set(
         thing_classes=CLASS_NAMES[cls_split], dirname=dirname, year=year, split=split
     )
