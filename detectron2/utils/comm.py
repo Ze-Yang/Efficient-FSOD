@@ -96,7 +96,7 @@ def _serialize_to_tensor(data, group):
     assert backend in ["gloo", "nccl"]
     device = torch.device("cpu" if backend == "gloo" else "cuda")
 
-    if isinstance(data, dict):
+    if isinstance(data, dict) and all([torch.is_tensor(x) for x in data.values()]):
         data = {key: value.to(device=device) for key, value in data.items()}
     buffer = pickle.dumps(data)
     if len(buffer) > 1024 ** 3:
@@ -175,7 +175,7 @@ def all_gather(data, group=None):
     for size, tensor in zip(size_list, tensor_list):
         buffer = tensor.cpu().numpy().tobytes()[:size]
         data = pickle.loads(buffer)
-        if isinstance(data, dict):
+        if isinstance(data, dict) and all([torch.is_tensor(x) for x in data.values()]):
             data_list.append({key: value.to(device='cuda') for key, value in data.items()})
         else:
             data_list.append(data)

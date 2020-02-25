@@ -205,6 +205,15 @@ def register_all_pascal_voc(root="datasets"):
         ("voc_2012_trainval", "VOC2012", "trainval"),
         ("voc_2012_train", "VOC2012", "train"),
         ("voc_2012_val", "VOC2012", "val"),
+        ("voc_2007_trainval_split1", "VOC2007", "trainval_split1"),
+        ("voc_2007_trainval_split2", "VOC2007", "trainval_split2"),
+        ("voc_2007_trainval_split3", "VOC2007", "trainval_split3"),
+        ("voc_2012_trainval_split1", "VOC2012", "trainval_split1"),
+        ("voc_2012_trainval_split2", "VOC2012", "trainval_split2"),
+        ("voc_2012_trainval_split3", "VOC2012", "trainval_split3"),
+        ("voc_2007_test_split1", "VOC2007", "test_split1"),
+        ("voc_2007_test_split2", "VOC2007", "test_split2"),
+        ("voc_2007_test_split3", "VOC2007", "test_split3"),
     ]
     for name, dirname, split in SPLITS:
         year = 2007 if "2007" in name else 2012

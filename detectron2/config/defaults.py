@@ -555,6 +555,8 @@ _C.TEST.PRECISE_BN.NUM_ITER = 200
 # ---------------------------------------------------------------------------- #
 # 1 for pre-training, 2 for fine-tuning
 _C.PHASE = 1
+# 0 for whole VOC classes, 1, 2, 3 for split1, split2, split3 classes respectively.
+_C.SPLIT = 0
 # 'ft' for fine tuning, 'ours' for our method
 _C.METHOD = ''
 # Directory where output files are written

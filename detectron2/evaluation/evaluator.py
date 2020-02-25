@@ -28,6 +28,12 @@ class DatasetEvaluator:
         """
         pass
 
+    def load(self):
+        """
+        Load saved test results from .pth file.
+        """
+        pass
+
     def process(self, input, output):
         """
         Process an input/output pair.

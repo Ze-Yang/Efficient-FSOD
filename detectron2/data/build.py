@@ -430,6 +430,7 @@ def build_detection_test_loader(cfg, dataset_name, mapper=None):
         ]
         if cfg.MODEL.LOAD_PROPOSALS
         else None,
+        cfg=cfg
     )
 
     dataset = DatasetFromList(dataset_dicts)

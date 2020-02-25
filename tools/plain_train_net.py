@@ -121,7 +121,7 @@ def get_evaluator(cfg, dataset_name, output_folder=None):
         ), "CityscapesEvaluator currently do not work with multiple machines."
         return CityscapesEvaluator(dataset_name)
     if evaluator_type == "pascal_voc":
-        return PascalVOCDetectionEvaluator(dataset_name)
+        return PascalVOCDetectionEvaluator(dataset_name, output_folder)
     if evaluator_type == "lvis":
         return LVISEvaluator(dataset_name, cfg, True, output_folder)
     if len(evaluator_list) == 0:
@@ -133,14 +133,18 @@ def get_evaluator(cfg, dataset_name, output_folder=None):
     return DatasetEvaluators(evaluator_list)
 
 
-def do_test(cfg, model):
+def do_test(cfg, model, args=None):
     results = OrderedDict()
     for dataset_name in cfg.DATASETS.TEST:
         data_loader = build_detection_test_loader(cfg, dataset_name)
         evaluator = get_evaluator(
             cfg, dataset_name, os.path.join(cfg.OUTPUT_DIR, "inference", dataset_name)
         )
-        results_i = inference_on_dataset(model, data_loader, evaluator)
+        if args is not None and args.retest is True:
+            evaluator.load()
+            results_i = evaluator.evaluate()
+        else:
+            results_i = inference_on_dataset(model, data_loader, evaluator)
         results[dataset_name] = results_i
         if comm.is_main_process():
             logger.info("Evaluation results for {} in csv format:".format(dataset_name))
@@ -253,7 +257,7 @@ def main(args):
         DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
             cfg.MODEL.WEIGHTS, resume=True
         )
-        return do_test(cfg, model)
+        return do_test(cfg, model, args)
 
     distributed = comm.get_world_size() > 1
     if distributed:

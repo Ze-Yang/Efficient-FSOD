@@ -9,6 +9,7 @@ import xml.etree.ElementTree as ET
 from collections import OrderedDict, defaultdict
 from functools import lru_cache
 import torch
+from fvcore.common.file_io import PathManager
 
 from detectron2.data import MetadataCatalog
 from detectron2.utils import comm
@@ -26,12 +27,13 @@ class PascalVOCDetectionEvaluator(DatasetEvaluator):
     the official API.
     """
 
-    def __init__(self, dataset_name):
+    def __init__(self, dataset_name, output_dir=None):
         """
         Args:
             dataset_name (str): name of the dataset, e.g., "voc_2007_test"
         """
         self._dataset_name = dataset_name
+        self._output_dir = output_dir
         meta = MetadataCatalog.get(dataset_name)
         self._anno_file_template = os.path.join(meta.dirname, "Annotations", "{}.xml")
         self._image_set_path = os.path.join(meta.dirname, "ImageSets", "Main", meta.split + ".txt")
@@ -43,6 +45,14 @@ class PascalVOCDetectionEvaluator(DatasetEvaluator):
 
     def reset(self):
         self._predictions = defaultdict(list)  # class name -> list of prediction strings
+
+    def load(self):
+        if self._output_dir:
+            file_path = os.path.join(self._output_dir, "instances_predictions.pth")
+            with PathManager.open(file_path, "rb") as f:
+                self._predictions = torch.load(f)
+        else:
+            assert False, 'Please indicate output_dir for retest.'
 
     def process(self, inputs, outputs):
         for input, output in zip(inputs, outputs):
@@ -74,6 +84,12 @@ class PascalVOCDetectionEvaluator(DatasetEvaluator):
                 predictions[clsid].extend(lines)
         del all_predictions
 
+        if self._output_dir:
+            PathManager.mkdirs(self._output_dir)
+            file_path = os.path.join(self._output_dir, "instances_predictions.pth")
+            with PathManager.open(file_path, "wb") as f:
+                torch.save(predictions, f)
+
         self._logger.info(
             "Evaluating {} using {} metric. "
             "Note that results do not use the official Matlab API.".format(
@@ -101,6 +117,21 @@ class PascalVOCDetectionEvaluator(DatasetEvaluator):
                         use_07_metric=self._is_2007,
                     )
                     aps[thresh].append(ap * 100)
+                    if thresh == 50:
+                        print('AP for {} = {:.2f}'.format(cls_name, ap * 100))
+        print('~~~~~~~~')
+        print('Results:')
+        for ap in aps[50]:
+            print('{:.2f}'.format(ap))
+        print('Base Mean AP = {:.2f}'.format(np.mean(aps[50][:15])))
+        print('Noval Mean AP = {:.2f}'.format(np.mean(aps[50][15:])))
+        print('~~~~~~~~')
+        print('--------------------------------------------------------------')
+        print('Results computed with the **unofficial** Python eval code.')
+        print('Results should be very close to the official MATLAB eval code.')
+        print('Recompute with `./tools/reval.py --matlab ...` for your paper.')
+        print('-- Thanks, The Management')
+        print('--------------------------------------------------------------')
 
         ret = OrderedDict()
         mAP = {iou: np.mean(x) for iou, x in aps.items()}

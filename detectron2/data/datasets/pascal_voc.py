@@ -14,15 +14,36 @@ __all__ = ["register_pascal_voc"]
 
 
 # fmt: off
-CLASS_NAMES = [
+CLASS_NAMES_origin = [
     "aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat",
     "chair", "cow", "diningtable", "dog", "horse", "motorbike", "person",
     "pottedplant", "sheep", "sofa", "train", "tvmonitor",
 ]
+
+CLASS_NAMES_split1 = [
+    'aeroplane', 'bicycle', 'boat', 'bottle', 'car', 'cat', 'chair',
+    'diningtable', 'dog', 'horse', 'person', 'pottedplant', 'sheep',
+    'train', 'tvmonitor', 'bird', 'bus', 'cow', 'motorbike', 'sofa'
+]
+
+CLASS_NAMES_split2 = [
+    'bicycle', 'bird', 'boat', 'bus', 'car', 'cat', 'chair', 'diningtable',
+    'dog', 'motorbike', 'person', 'pottedplant', 'sheep', 'train',
+    'tvmonitor', 'aeroplane', 'bottle', 'cow', 'horse', 'sofa'
+]
+
+CLASS_NAMES_split3 = [
+    'aeroplane', 'bicycle', 'bird', 'bottle', 'bus', 'car', 'chair', 'cow',
+    'diningtable', 'dog', 'horse', 'person', 'pottedplant', 'train',
+    'tvmonitor', 'boat', 'cat', 'motorbike', 'sheep', 'sofa'
+]
+
+CLASS_NAMES = (CLASS_NAMES_origin, CLASS_NAMES_split1,
+               CLASS_NAMES_split2, CLASS_NAMES_split3)
 # fmt: on
 
 
-def load_voc_instances(dirname: str, split: str):
+def load_voc_instances(cfg, dirname: str, split: str):
     """
     Load Pascal VOC detection annotations to Detectron2 format.
 
@@ -64,7 +85,7 @@ def load_voc_instances(dirname: str, split: str):
             bbox[0] -= 1.0
             bbox[1] -= 1.0
             instances.append(
-                {"category_id": CLASS_NAMES.index(cls), "bbox": bbox, "bbox_mode": BoxMode.XYXY_ABS}
+                {"category_id": CLASS_NAMES[cfg.SPLIT].index(cls), "bbox": bbox, "bbox_mode": BoxMode.XYXY_ABS}
             )
         r["annotations"] = instances
         dicts.append(r)
@@ -72,7 +93,11 @@ def load_voc_instances(dirname: str, split: str):
 
 
 def register_pascal_voc(name, dirname, split, year):
-    DatasetCatalog.register(name, lambda: load_voc_instances(dirname, split))
+    DatasetCatalog.register(name, lambda cfg=None: load_voc_instances(cfg, dirname, split))
+    if 'split' in name:
+        cls_split = int(name.split('_')[-1][-1])
+    else:
+        cls_split = 0
     MetadataCatalog.get(name).set(
-        thing_classes=CLASS_NAMES, dirname=dirname, year=year, split=split
+        thing_classes=CLASS_NAMES[cls_split], dirname=dirname, year=year, split=split
     )
