@@ -203,6 +203,7 @@ class RPNOutputs(object):
         anchors,
         boundary_threshold=0,
         gt_boxes=None,
+        gt_classes=None,
         smooth_l1_beta=0.0,
     ):
         """
@@ -241,6 +242,7 @@ class RPNOutputs(object):
 
         self.anchors = anchors
         self.gt_boxes = gt_boxes
+        self.gt_classes = gt_classes
         self.num_feature_maps = len(pred_objectness_logits)
         self.num_images = len(images)
         self.image_sizes = images.image_sizes
@@ -259,7 +261,7 @@ class RPNOutputs(object):
         gt_anchor_deltas = []
         # Concatenate anchors from all feature maps into a single Boxes per image
         anchors = [Boxes.cat(anchors_i) for anchors_i in self.anchors]
-        for image_size_i, anchors_i, gt_boxes_i in zip(self.image_sizes, anchors, self.gt_boxes):
+        for image_size_i, anchors_i, gt_boxes_i, gt_classes_i in zip(self.image_sizes, anchors, self.gt_boxes, self.gt_classes):
             """
             image_size_i: (h, w) for the i-th image
             anchors_i: anchors for i-th image
@@ -288,6 +290,10 @@ class RPNOutputs(object):
                 gt_anchor_deltas_i = self.box2box_transform.get_deltas(
                     anchors_i.tensor, matched_gt_boxes.tensor
                 )
+
+            # Let RPN ignore those anchors that are matched to "-1" gt_label
+            gt_classes_i = gt_classes_i[matched_idxs]
+            gt_objectness_logits_i[gt_classes_i == -1] = -1
 
             gt_objectness_logits.append(gt_objectness_logits_i)
             gt_anchor_deltas.append(gt_anchor_deltas_i)

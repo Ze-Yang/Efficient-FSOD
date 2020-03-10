@@ -140,6 +140,7 @@ class RPN(nn.Module):
             loss: dict[Tensor] or None
         """
         gt_boxes = [x.gt_boxes for x in gt_instances] if gt_instances is not None else None
+        gt_classes = [x.gt_classes for x in gt_instances] if gt_instances is not None else None
         del gt_instances
         features = [features[f] for f in self.in_features]
         pred_objectness_logits, pred_anchor_deltas = self.rpn_head(features)
@@ -157,6 +158,7 @@ class RPN(nn.Module):
             anchors,
             self.boundary_threshold,
             gt_boxes,
+            gt_classes,
             self.smooth_l1_beta,
         )
 
