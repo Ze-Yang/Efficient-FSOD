@@ -557,6 +557,8 @@ _C.TEST.PRECISE_BN.NUM_ITER = 200
 _C.PHASE = 1
 # 0 for whole VOC classes, 1, 2, 3 for split1, split2, split3 classes respectively.
 _C.SPLIT = 0
+# N Shot refers to N instance when True, otherwise refers to N images.
+_C.INSTANCE_SHOT = False
 # 'ft' for fine tuning, 'ours' for our method
 _C.METHOD = ''
 # Directory where output files are written

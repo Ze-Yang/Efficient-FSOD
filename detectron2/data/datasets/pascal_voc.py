@@ -75,7 +75,7 @@ def load_voc_instances(cfg, dirname: str, split: str):
         }
         instances = []
 
-        for obj in tree.findall("object"):
+        for i, obj in enumerate(tree.findall("object")):
             cls = obj.find("name").text
             # We include "difficult" samples in training.
             # Based on limited experiments, they don't hurt accuracy.
@@ -91,7 +91,8 @@ def load_voc_instances(cfg, dirname: str, split: str):
             bbox[0] -= 1.0
             bbox[1] -= 1.0
             instances.append(
-                {"category_id": CLASS_NAMES[cfg.SPLIT].index(cls), "bbox": bbox, "bbox_mode": BoxMode.XYXY_ABS}
+                {"category_id": -1 if cfg.INSTANCE_SHOT and i not in [0] and 'train' in split else
+                    CLASS_NAMES[cfg.SPLIT].index(cls), "bbox": bbox, "bbox_mode": BoxMode.XYXY_ABS}
             )
         r["annotations"] = instances
         dicts.append(r)
