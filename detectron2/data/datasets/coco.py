@@ -136,22 +136,24 @@ Category ids in annotations are not in [1, #categories]! We'll apply a mapping f
 
     num_instances_without_valid_segmentation = 0
 
-    if 'train' in dataset_name and cfg.PHASE == 2:
-        cls_img_dict = {i: [] for i in id_of_int}
-        for (img_dict, anno_dict_list) in imgs_anns:
-            cls_not_full = set([cls for cls, imgs in cls_img_dict.items() if len(imgs) < cfg.DATASETS.SHOT])
-            if not cls_not_full:
-                break
-            img_cls = set([x["category_id"] for x in anno_dict_list])
-            selectable_cls = list(img_cls & cls_not_full)
-            if not selectable_cls:
-                continue
-            cls_selected = random.choice(selectable_cls)
-            cls_img_dict[cls_selected].append((img_dict, anno_dict_list))
-        imgs_anns = list(itertools.chain.from_iterable(cls_img_dict.values()))
-        logger.info("Randomly selecting {} images in COCO format from {} for {} shot setting".
-                    format(len(imgs_anns), json_file, cfg.DATASETS.SHOT))
+    # if 'train' in dataset_name and cfg.PHASE == 2:
+    #     cls_img_dict = {i: [] for i in id_of_int}
+    #     for (img_dict, anno_dict_list) in imgs_anns:
+    #         cls_not_full = set([cls for cls, imgs in cls_img_dict.items() if len(imgs) < cfg.DATASETS.SHOT])
+    #         if not cls_not_full:
+    #             break
+    #         img_cls = set([x["category_id"] for x in anno_dict_list])
+    #         selectable_cls = list(img_cls & cls_not_full)
+    #         if not selectable_cls:
+    #             continue
+    #         cls_selected = random.choice(selectable_cls)
+    #         cls_img_dict[cls_selected].append((img_dict, anno_dict_list))
+    #     imgs_anns = list(itertools.chain.from_iterable(cls_img_dict.values()))
+    #     logger.info("Randomly selecting {} images in COCO format from {} for {} shot setting".
+    #                 format(len(imgs_anns), json_file, cfg.DATASETS.SHOT))
 
+    # random.shuffle(imgs_anns)
+    cls_num = {i: 0 for i in id_of_int}
     for (img_dict, anno_dict_list) in imgs_anns:
         record = {}
         record["file_name"] = os.path.join(image_root, img_dict["file_name"])
@@ -160,6 +162,7 @@ Category ids in annotations are not in [1, #categories]! We'll apply a mapping f
         image_id = record["image_id"] = img_dict["id"]
 
         objs = []
+        find = False
         for anno in anno_dict_list:
             # Check that the image_id in this annotation is the same as
             # the image_id we're looking at.
@@ -173,6 +176,16 @@ Category ids in annotations are not in [1, #categories]! We'll apply a mapping f
             assert anno.get("ignore", 0) == 0
 
             obj = {key: anno[key] for key in ann_keys if key in anno}
+
+            cls_id = obj["category_id"]
+            if not find:
+                if cls_num[cls_id] < cfg.DATASETS.SHOT:
+                    find = True
+                    cls_num[cls_id] += 1
+                else:
+                    cls_id = -1
+            else:
+                cls_id = -1
 
             segm = anno.get("segmentation", None)
             if segm:  # either list[list[float]] or dict(RLE)
@@ -197,10 +210,26 @@ Category ids in annotations are not in [1, #categories]! We'll apply a mapping f
 
             obj["bbox_mode"] = BoxMode.XYWH_ABS
             if id_map:
-                obj["category_id"] = id_map[obj["category_id"]]
+                if 'train' in dataset_name and cfg.PHASE == 2:
+                    obj["category_id"] = id_map[cls_id] if cls_id != -1 else -1
+                else:
+                    obj["category_id"] = id_map[obj["category_id"]]
             objs.append(obj)
-        record["annotations"] = objs
-        dataset_dicts.append(record)
+        if 'train' in dataset_name and cfg.PHASE == 2:
+            # if not all([obj["category_id"] == -1 for obj in objs]):
+            if find:
+                record["annotations"] = objs
+                dataset_dicts.append(record)
+            if min(cls_num.values()) == cfg.DATASETS.SHOT:
+                break
+        else:
+            record["annotations"] = objs
+            dataset_dicts.append(record)
+        #     if id_map:
+        #         obj["category_id"] = id_map[obj["category_id"]]
+        #     objs.append(obj)
+        # record["annotations"] = objs
+        # dataset_dicts.append(record)
 
     if num_instances_without_valid_segmentation > 0:
         logger.warning(
