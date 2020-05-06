@@ -2,7 +2,7 @@
 output
 instant_test_output
 inference_test_output
-
+/results
 
 *.jpg
 *.png
