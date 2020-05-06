@@ -113,7 +113,7 @@ def default_setup(cfg, args):
         )
 
     logger.info("Running with full config:\n{}".format(cfg))
-    if comm.is_main_process() and output_dir:
+    if comm.is_main_process() and output_dir and not args.retest and not args.eval_only:
         # Note: some of our scripts may expect the existence of
         # config.yaml in output directory
         path = os.path.join(output_dir, "config.yaml")
