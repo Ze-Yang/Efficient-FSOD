@@ -1,7 +1,7 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 from typing import Any, Dict, List
 import torch
-
+# import logging
 from detectron2.config import CfgNode
 
 from .lr_scheduler import WarmupCosineLR, WarmupMultiStepLR
@@ -19,6 +19,18 @@ def build_optimizer(cfg: CfgNode, model: torch.nn.Module) -> torch.optim.Optimiz
         weight_decay = cfg.SOLVER.WEIGHT_DECAY
         if key.endswith("norm.weight") or key.endswith("norm.bias"):
             weight_decay = cfg.SOLVER.WEIGHT_DECAY_NORM
+        # elif 'reweight' in key:
+        #     lr = cfg.SOLVER.BASE_LR * 2
+        #     logger = logging.getLogger(__name__)
+        #     logger.info(
+        #         'The lr for {} is multiply by 2.'.format(key)
+        #     )
+        # elif ('box_head.' in key or 'cls_score.' in key) and cfg.PHASE == 2 and cfg.METHOD == 'ours':
+        #     lr = cfg.SOLVER.BASE_LR * 0.1
+        #     logger = logging.getLogger(__name__)
+        #     logger.info(
+        #         'The lr for {} is multiply by 0.1.'.format(key)
+        #     )
         elif key.endswith(".bias"):
             # NOTE: unlike Detectron v1, we now default BIAS_LR_FACTOR to 1.0
             # and WEIGHT_DECAY_BIAS to WEIGHT_DECAY so that bias optimizer
