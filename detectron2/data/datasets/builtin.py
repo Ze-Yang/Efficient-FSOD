@@ -39,6 +39,15 @@ _PREDEFINED_SPLITS_COCO["coco"] = {
         "coco/val2014",
         "coco/annotations/instances_valminusminival2014.json",
     ),
+    "coco_2014_valminusminival_nonvoc_split": (
+        "coco/val2014",
+        "coco/annotations/split_nonvoc_instances_valminusminival2014.json",
+    ),
+
+    "coco_2014_valminusminival_voc_split": (
+        "coco/val2014",
+        "coco/annotations/split_voc_instances_valminusminival2014.json",
+    ),
     "coco_2017_train": ("coco/train2017", "coco/annotations/instances_train2017.json"),
     "coco_2017_train_voc_split": ("coco/train2017", "coco/annotations/split_voc_instances_train2017.json"),
     "coco_2017_train_nonvoc_split": ("coco/train2017", "coco/annotations/split_nonvoc_instances_train2017.json"),
