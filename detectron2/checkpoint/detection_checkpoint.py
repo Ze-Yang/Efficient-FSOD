@@ -2,7 +2,7 @@
 import pickle
 from fvcore.common.checkpoint import Checkpointer
 from fvcore.common.file_io import PathManager
-
+import logging
 import detectron2.utils.comm as comm
 import os
 from .c2_model_loading import align_and_update_state_dicts
@@ -14,7 +14,7 @@ class DetectionCheckpointer(Checkpointer):
     model zoo, and apply conversions for legacy models.
     """
 
-    def __init__(self, model, save_dir="", phase=None, *, save_to_disk=None, **checkpointables):
+    def __init__(self, model, save_dir="", cfg=None, *, save_to_disk=None, **checkpointables):
         is_main_process = comm.is_main_process()
         super().__init__(
             model,
@@ -22,7 +22,8 @@ class DetectionCheckpointer(Checkpointer):
             save_to_disk=is_main_process if save_to_disk is None else save_to_disk,
             **checkpointables,
         )
-        self.phase = phase
+        self.phase = cfg.PHASE if cfg is not None else None
+        self.cfg = cfg
 
     def _load_file(self, filename):
         if filename.endswith(".pkl"):
@@ -56,6 +57,15 @@ class DetectionCheckpointer(Checkpointer):
                 c2_conversion=checkpoint.get("__author__", None) == "Caffe2",
             )
             checkpoint["model"] = model_state_dict
+        if self.cfg is not None and self.cfg.MODEL.ROI_HEADS.NAME == 'ReweightedROIHeads_Incre':
+            logger = logging.getLogger(__name__)
+            logger.info("Initializing box_head for noval classes.")
+            dict = {}
+            for key, value in checkpoint["model"].items():
+                if 'box_head' in key:
+                    key = key.replace('box_head', 'box_head_noval')
+                    dict[key] = value
+            checkpoint["model"].update(dict)
         # for non-caffe2 models, use standard ways to load it
         super()._load_model(checkpoint)
 
