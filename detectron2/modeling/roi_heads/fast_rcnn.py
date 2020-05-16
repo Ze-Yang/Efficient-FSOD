@@ -386,25 +386,29 @@ class FastRCNNOutputLayers_Incre(nn.Module):
         # The prediction layer for num_classes foreground classes and one background class
         # (hence + 1)
         self.cls_score = nn.Linear(input_size, 16)
-        self.cls_score_noval = nn.Linear(input_size, 1)
+        self.cls_score_noval = nn.Linear(input_size, 5)
+        # self.cls_score_noval = nn.Linear(input_size, 1)
         num_bbox_reg_classes = 1 if cls_agnostic_bbox_reg or reweight else num_classes
         self.bbox_pred = nn.Linear(input_size, num_bbox_reg_classes * box_dim)
         self.reweight = reweight
         self.num_classes = num_classes
 
         nn.init.normal_(self.cls_score.weight, std=0.01)
+        nn.init.normal_(self.cls_score_noval.weight, std=0.01)
         nn.init.normal_(self.bbox_pred.weight, std=0.001)
-        for l in [self.cls_score, self.bbox_pred]:
+        for l in [self.cls_score, self.cls_score_noval, self.bbox_pred]:
             nn.init.constant_(l.bias, 0)
 
     def forward(self, x):
         if x.dim() > 2 and not self.reweight:
             x = torch.flatten(x, start_dim=1)
         base_bg_score = self.cls_score(x[:, 0])
-        noval_score = self.cls_score_noval(x[:, 1:]).squeeze()
+        # noval_score = self.cls_score_noval(x[:, 1:]).squeeze()
+        noval_score = self.cls_score_noval(x[:, 1:])
+        noval_score = noval_score[:, range(5), range(5)]
         scores = torch.cat([base_bg_score[:, :15], noval_score, base_bg_score[:, -1][:, None]], dim=1)
-        base_proposal_deltas = self.bbox_pred(x[:, 0].unsqueeze(1)).\
-            expand(self.bbox_pred(x).shape[0], 15, -1).reshape(self.bbox_pred(x).shape[0], -1)
+        base_proposal_deltas = self.bbox_pred(x[:, 0].unsqueeze(1)). \
+            expand(-1, 15, -1).reshape(self.bbox_pred(x).shape[0], -1)
         noval_proposal_deltas = self.bbox_pred(x[:, 1:]).reshape(self.bbox_pred(x).shape[0], -1)
         proposal_deltas = torch.cat([base_proposal_deltas, noval_proposal_deltas], dim=1)
         return scores, proposal_deltas

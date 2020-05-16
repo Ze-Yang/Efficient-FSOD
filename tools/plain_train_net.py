@@ -64,32 +64,65 @@ def init_reweight(cfg, model, data_loader):
     Initialize reweight parameters.
     """
     logger.info("Initializing reweight parameters...")
-    cls_dict = {i: [] for i in range(cfg.MODEL.ROI_HEADS.NUM_CLASSES)}
+    cls_dict_feat = {i: [] for i in range(cfg.MODEL.ROI_HEADS.NUM_CLASSES)}
+    cls_dict_act = {i: [] for i in range(cfg.MODEL.ROI_HEADS.NUM_CLASSES)}
     with inference_context(model), torch.no_grad():
         for data, _ in zip(data_loader, range(cfg.INIT_ITERS)):
-            output = model(data, init=True)
-            cls_dict = {key: cls_dict[key] + output[key] for key in cls_dict.keys()}  # per image accumulation
+            feat, act = model(data, init=True)
+            cls_dict_act = {key: cls_dict_act[key] + act[key] for key in cls_dict_act.keys()}
+            cls_dict_feat = {key: cls_dict_feat[key] + feat[key] for key in cls_dict_feat.keys()}  # per image accumulation
 
-    cls_dict = {key: torch.stack(value, dim=0) if value else torch.empty(0)
-                for key, value in cls_dict.items()}  # concat to tensor
-    dict_list = comm.all_gather(cls_dict)  # gather from all GPUs
-    cls_dict = {key: torch.cat([dict_list[i][key] for i in range(len(dict_list))], dim=0)
-                for key in cls_dict.keys()}  # concat the results
-    cls_tensor = torch.sigmoid(torch.stack([x.mean(0) for x in cls_dict.values()], dim=0))
-    cls_tensor = cls_tensor / cls_tensor.mean(1)[:, None]
+    cls_dict_feat = {key: torch.stack(value, dim=0) if value else torch.empty(0, device='cuda')
+                for key, value in cls_dict_feat.items()}  # concat to tensor
+    dict_list = comm.all_gather(cls_dict_feat)  # gather from all GPUs
+    cls_dict_feat = {key: torch.cat([dict_list[i][key] for i in range(len(dict_list))], dim=0)
+                for key in cls_dict_feat.keys()}  # concat the results
+    # if comm.is_main_process():
+    #     file = 'results/support_10shot_in.pkl'
+    #     import pickle
+    #     with open(file, 'wb') as f:
+    #         pickle.dump(cls_dict_feat, f, pickle.HIGHEST_PROTOCOL)
+    # comm.synchronize()
+    # exit(0)
+    cls_feat = torch.sigmoid(torch.stack([x.mean(0) for x in cls_dict_feat.values()], dim=0))
+    cls_feat = cls_feat / cls_feat.mean(1)[:, None]
+    if cfg.MODEL.ROI_HEADS.NAME == 'ReweightedROIHeads_Incre':
+        cls_feat = torch.cat([torch.ones((1, cls_feat.size(1)), device=cls_feat.device), cls_feat[15:]], dim=0)
+
+    cls_dict_act = {key: torch.stack(value, dim=0) if value else torch.empty(0, device='cuda')
+                     for key, value in cls_dict_act.items()}  # concat to tensor
+    dict_list = comm.all_gather(cls_dict_act)  # gather from all GPUs
+    cls_dict_act = {key: torch.cat([dict_list[i][key] for i in range(len(dict_list))], dim=0)
+                     for key in cls_dict_act.keys()}  # concat the results
+    cls_act = torch.stack([x.mean(0) for x in cls_dict_act.values()], dim=0)
+    cls_act = cls_act / cls_act.norm(dim=1)[:, None]
+
     if comm.get_world_size() > 1:
-        model.module.roi_heads.reweight.weight.data = cls_tensor if cfg.MODEL.MASK_ON else cls_tensor[15:]
-        # model.module.roi_heads.reweight.weight.data = cls_tensor
+        # model.module.roi_heads.reweight.weight.data = cls_tensor if cfg.MODEL.MASK_ON else cls_tensor[15:]
+        model.module.roi_heads.reweight.weight.data = cls_feat
+        if cfg.MODEL.ROI_HEADS.NAME == 'ReweightedROIHeads_Incre':
+            model.module.roi_heads.box_predictor.cls_score_noval.weight.data = cls_act[15:]
+        # else:
+        #     cls_act = torch.cat([cls_act, model.module.roi_heads.box_predictor.cls_score.weight[-1][None, :]], dim=0)
+        #     model.module.roi_heads.box_predictor.cls_score.weight.data = cls_act
     else:
-        model.roi_heads.reweight.weight.data = cls_tensor if cfg.MODEL.MASK_ON else cls_tensor[15:]
-        # model.roi_heads.reweight.weight.data = cls_tensor
+        # model.roi_heads.reweight.weight.data = cls_tensor if cfg.MODEL.MASK_ON else cls_tensor[15:]
+        model.roi_heads.reweight.weight.data = cls_feat
+        if cfg.MODEL.ROI_HEADS.NAME == 'ReweightedROIHeads_Incre':
+            model.roi_heads.box_predictor.cls_score_noval.weight.data = cls_act[15:]
+        # else:
+        #     cls_act = torch.cat([cls_act, model.roi_heads.box_predictor.cls_score.weight[-1][None, :]], dim=0)
+        #     model.roi_heads.box_predictor.cls_score.weight.data = cls_act
+            # logger.info(cls_act.size(), model.roi_heads.box_predictor.cls_score.weight.data.size())
 
-    num_cls = [value.size(0) for value in cls_dict.values()]
+    num_cls = [value.size(0) for value in cls_dict_feat.values()]
     logger.info('{}'.format(num_cls))
-    del cls_dict
+    del cls_dict_feat
     del dict_list
     del num_cls
-    del cls_tensor
+    del cls_feat
+    del cls_dict_act
+    del cls_act
     return None
 
 
@@ -163,10 +196,10 @@ def do_train(cfg, model, resume=False):
     scheduler = build_lr_scheduler(cfg, optimizer)
 
     checkpointer = DetectionCheckpointer(
-        model, cfg.OUTPUT_DIR, cfg.PHASE, optimizer=optimizer, scheduler=scheduler
+        model, cfg.OUTPUT_DIR, cfg, optimizer=optimizer, scheduler=scheduler
     )
     start_iter = (
-        checkpointer.resume_or_load(cfg.LOAD_FILE, resume=True).get("iteration", -1) + 1 if cfg.PHASE == 2 \
+        checkpointer.resume_or_load(cfg.LOAD_FILE, resume=resume).get("iteration", -1) + 1 if cfg.PHASE == 2 \
         else checkpointer.resume_or_load(cfg.MODEL.WEIGHTS, resume=resume).get("iteration", -1) + 1
     )
     max_iter = cfg.SOLVER.MAX_ITER
@@ -185,17 +218,47 @@ def do_train(cfg, model, resume=False):
         else []
     )
 
+    # file = 'results/learned_fullshot_5999.pkl'
+    # a = model.roi_heads.reweight.weight.data
+    # import pickle
+    # with open(file, 'wb') as f:
+    #     pickle.dump(a, f, pickle.HIGHEST_PROTOCOL)
+
     # compared to "train_net.py", we do not support accurate timing and
     # precise BN here, because they are not trivial to implement
     dataset, dataset_dicts = build_detection_train_loader(cfg, get_dataset=True)
 
-    # initialize the reweight parameters
     if cfg.PHASE == 2 and cfg.METHOD == 'ours':
+        # initialize the reweight parameters
         init_reweight(cfg, model, build_dataloader(cfg, dataset, dataset_dicts))
         if comm.get_world_size() > 1:
-            logger.info('After init: {}'.format(model.module.roi_heads.reweight.weight))
+            logger.info('Reweight after init: {}'.format(model.module.roi_heads.reweight.weight))
+            if cfg.MODEL.ROI_HEADS.NAME == 'ReweightedROIHeads_Incre':
+                logger.info('Cls_N after init: {}'.format(model.module.roi_heads.box_predictor.cls_score_noval.weight))
         else:
-            logger.info('After init: {}'.format(model.roi_heads.reweight.weight))
+            logger.info('Reweight after init: {}'.format(model.roi_heads.reweight.weight))
+            if cfg.MODEL.ROI_HEADS.NAME == 'ReweightedROIHeads_Incre':
+                logger.info('Cls_N after init: {}'.format(model.roi_heads.box_predictor.cls_score_noval.weight))
+    # elif cfg.PHASE == 2 and cfg.METHOD == 'ft':
+    #     # For incremental baseline finetuning
+    #     checkpoint = checkpointer._load_file(cfg.LOAD_FILE)
+    #     checkpoint_state_dict = checkpoint.pop("model")
+    #     cls_score = checkpoint_state_dict['roi_heads.box_predictor.cls_score.weight']
+    #     if comm.get_world_size() > 1:
+    #         tmp = model.module.roi_heads.box_predictor.cls_score.weight.data
+    #         tmp[:15] = cls_score[:15]
+    #         tmp[-1] = cls_score[-1]
+    #         model.module.roi_heads.box_predictor.cls_score.weight.data = tmp
+    #         logger.info('Init Base and Bg classifier')
+    #     else:
+    #         tmp = model.roi_heads.box_predictor.cls_score.weight.data
+    #         tmp[:15] = cls_score[:15]
+    #         tmp[-1] = cls_score[-1]
+    #         model.roi_heads.box_predictor.cls_score.weight.data = tmp
+    #         logger.info('Init Base and Bg classifier')
+
+    # mean = torch.mean(model.roi_heads.reweight.weight.data, dim=1)
+    # var = torch.var(model.roi_heads.reweight.weight.data, dim=1)
     # tensor_display(model.roi_heads.reweight.weight.data)
     # exit(0)
 
@@ -258,7 +321,7 @@ def main(args):
     logger.info("Model:\n{}".format(model))
     if args.eval_only:
         DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
-            cfg.MODEL.WEIGHTS, resume=True
+            cfg.LOAD_FILE, resume=args.resume
         )
         return do_test(cfg, model, args)
 

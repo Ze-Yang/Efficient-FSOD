@@ -791,12 +791,19 @@ class ReweightedROIHeads_Tf(StandardROIHeads):
 
     def _init_reweight(self, features, targets):
         box_features = self.box_pooler(features, [x.gt_boxes for x in targets])
+        activations = self.box_head(box_features)
         box_features = nn.functional.avg_pool2d(box_features, self.box_pooler.output_size).squeeze()
-        gt_classes = torch.cat([x.gt_classes for x in targets], dim=0).tolist()
-        cls_dict = {i: [] for i in range(self.num_classes)}
+        gt_classes = torch.cat([x.gt_classes for x in targets], dim=0)
+        keep = gt_classes != -1
+        box_features = box_features[keep]
+        activations = activations[keep]
+        gt_classes = gt_classes[keep].tolist()
+        cls_dict_feat = {i: [] for i in range(self.num_classes)}
+        cls_dict_act = {i: [] for i in range(self.num_classes)}
         for i in range(len(gt_classes)):
-            cls_dict[gt_classes[i]].append(box_features[i])
-        return cls_dict
+            cls_dict_feat[gt_classes[i]].append(box_features[i])
+            cls_dict_act[gt_classes[i]].append(activations[i])
+        return cls_dict_feat, cls_dict_act
 
     def _forward_box(self, features, proposals):
         """
@@ -880,6 +887,9 @@ class ReweightedROIHeads_Incre(StandardROIHeads):
         self.box_head = build_box_head(
             cfg, ShapeSpec(channels=in_channels, height=pooler_resolution, width=pooler_resolution)
         )
+        self.box_head_noval = build_box_head(
+            cfg, ShapeSpec(channels=in_channels, height=pooler_resolution, width=pooler_resolution)
+        )
         self.box_predictor = FastRCNNOutputLayers_Incre(
             self.box_head.output_size, self.num_classes, self.cls_agnostic_bbox_reg, reweight=True
         )
@@ -891,7 +901,7 @@ class ReweightedROIHeads_Incre(StandardROIHeads):
         # Check all channel counts are equal
         assert len(set(in_channels)) == 1, in_channels
         in_channels = in_channels[0]
-        self.reweight = torch.nn.Linear(in_channels, 5, bias=False)
+        self.reweight = torch.nn.Linear(in_channels, 6, bias=False)
         nn.init.kaiming_normal_(self.reweight.weight, mode="fan_out", nonlinearity="relu")
 
     def forward(self, images, features, proposals, targets=None):
@@ -923,12 +933,19 @@ class ReweightedROIHeads_Incre(StandardROIHeads):
 
     def _init_reweight(self, features, targets):
         box_features = self.box_pooler(features, [x.gt_boxes for x in targets])
+        activations = self.box_head(box_features)
         box_features = nn.functional.avg_pool2d(box_features, self.box_pooler.output_size).squeeze()
-        gt_classes = torch.cat([x.gt_classes for x in targets], dim=0).tolist()
-        cls_dict = {i: [] for i in range(self.num_classes)}
+        gt_classes = torch.cat([x.gt_classes for x in targets], dim=0)
+        keep = gt_classes != -1
+        box_features = box_features[keep]
+        activations = activations[keep]
+        gt_classes = gt_classes[keep].tolist()
+        cls_dict_feat = {i: [] for i in range(self.num_classes)}
+        cls_dict_act = {i: [] for i in range(self.num_classes)}
         for i in range(len(gt_classes)):
-            cls_dict[gt_classes[i]].append(box_features[i])
-        return cls_dict
+            cls_dict_feat[gt_classes[i]].append(box_features[i])
+            cls_dict_act[gt_classes[i]].append(activations[i])
+        return cls_dict_feat, cls_dict_act
 
     def _forward_box(self, features, proposals):
         """
@@ -947,13 +964,19 @@ class ReweightedROIHeads_Incre(StandardROIHeads):
         """
         box_features = self.box_pooler(features, [x.proposal_boxes for x in proposals])  # [2*512, 256, 7 ,7]
 
-        assert self.reweight.weight.dim() == 2, 'The dim of reweight parameters should be 2.'
-        weight = torch.cat([torch.ones((1, self.reweight.weight.size(1)), device=self.reweight.weight.device),
-                            self.reweight.weight],
-                           dim=0
-                           )
-        box_features = weight[:, :, None, None] * box_features.unsqueeze(1)
-        box_features = self.box_head(box_features)
+        # assert self.reweight.weight.dim() == 2, 'The dim of reweight parameters should be 2.'
+        # weight = torch.cat([torch.ones((1, self.reweight.weight.size(1)), device=self.reweight.weight.device),
+        #                     self.reweight.weight],
+        #                    dim=0
+        #                    )
+        box_features = self.reweight.weight[:, :, None, None] * box_features.unsqueeze(1)
+        # box_features = box_features.unsqueeze(1).expand(-1, 6, -1, -1, -1)
+        base_box_features = box_features[:, 0].unsqueeze(1)
+        noval_box_features = box_features[:, 1:]
+        base_box_features = self.box_head(base_box_features)
+        noval_box_features = self.box_head_noval(noval_box_features)
+        box_features = torch.cat((base_box_features, noval_box_features), dim=1)
+        # box_features = self.box_head(box_features)
         pred_class_logits, pred_proposal_deltas = self.box_predictor(box_features)
         del box_features
 
