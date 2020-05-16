@@ -14,6 +14,8 @@ from ..proposal_generator import build_proposal_generator
 from ..roi_heads import build_roi_heads
 from .build import META_ARCH_REGISTRY
 
+logger = logging.getLogger(__name__)
+
 __all__ = ["GeneralizedRCNN", "ProposalNetwork"]
 
 
@@ -42,6 +44,28 @@ class GeneralizedRCNN(nn.Module):
         pixel_std = torch.Tensor(cfg.MODEL.PIXEL_STD).to(self.device).view(num_channels, 1, 1)
         self.normalizer = lambda x: (x - pixel_mean) / pixel_std
         self.to(self.device)
+
+        if cfg.MODEL.BACKBONE.FREEZE:
+            for p in self.backbone.parameters():
+                p.requires_grad = False
+            logger.info('Freeze backbone parameters')
+
+        if cfg.MODEL.PROPOSAL_GENERATOR.FREEZE:
+            for p in self.proposal_generator.parameters():
+                p.requires_grad = False
+            logger.info('Freeze proposal generator parameters')
+
+        if cfg.MODEL.ROI_BOX_HEAD.FREEZE:
+            for p in self.roi_heads.box_head.parameters():
+                p.requires_grad = False
+            logger.info('Freeze roi_box_head parameters')
+
+        if cfg.MODEL.ROI_MASK_HEAD.FREEZE:
+            for p in self.roi_heads.mask_head.parameters():
+                p.requires_grad = False
+            for p in self.roi_heads.mask_head.predictor.parameters():
+                p.requires_grad = True
+            logger.info('Freeze roi_mask_head parameters')
 
     def visualize_training(self, batched_inputs, proposals):
         """

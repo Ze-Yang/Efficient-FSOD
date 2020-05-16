@@ -129,6 +129,8 @@ _C.MODEL.BACKBONE = CN()
 _C.MODEL.BACKBONE.NAME = "build_resnet_backbone"
 # Add StopGrad at a specified stage so the bottom layers are frozen
 _C.MODEL.BACKBONE.FREEZE_AT = 2
+# Freeze backbone
+_C.MODEL.BACKBONE.FREEZE = False
 
 
 # ---------------------------------------------------------------------------- #
@@ -157,6 +159,8 @@ _C.MODEL.PROPOSAL_GENERATOR.NAME = "RPN"
 # Proposal height and width both need to be greater than MIN_SIZE
 # (a the scale used during training or inference)
 _C.MODEL.PROPOSAL_GENERATOR.MIN_SIZE = 0
+# Freeze proposal generator
+_C.MODEL.PROPOSAL_GENERATOR.FREEZE = False
 
 
 # ---------------------------------------------------------------------------- #
@@ -302,6 +306,8 @@ _C.MODEL.ROI_BOX_HEAD.CONV_DIM = 256
 _C.MODEL.ROI_BOX_HEAD.NORM = ""
 # Whether to use class agnostic for bbox regression
 _C.MODEL.ROI_BOX_HEAD.CLS_AGNOSTIC_BBOX_REG = False
+# Freeze ROI box heads
+_C.MODEL.ROI_BOX_HEAD.FREEZE = False
 
 # ---------------------------------------------------------------------------- #
 # Cascaded Box Head
@@ -332,6 +338,8 @@ _C.MODEL.ROI_MASK_HEAD.NORM = ""
 _C.MODEL.ROI_MASK_HEAD.CLS_AGNOSTIC_MASK = False
 # Type of pooling operation applied to the incoming feature map for each RoI
 _C.MODEL.ROI_MASK_HEAD.POOLER_TYPE = "ROIAlignV2"
+# Freeze ROI box heads
+_C.MODEL.ROI_MASK_HEAD.FREEZE = False
 
 
 # ---------------------------------------------------------------------------- #
