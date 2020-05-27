@@ -124,7 +124,7 @@ class PascalVOCDetectionEvaluator(DatasetEvaluator):
         for ap in aps[50]:
             print('{:.2f}'.format(ap))
         print('Base Mean AP = {:.2f}'.format(np.mean(aps[50][:15])))
-        print('Noval Mean AP = {:.2f}'.format(np.mean(aps[50][15:])))
+        print('Novel Mean AP = {:.2f}'.format(np.mean(aps[50][15:])))
         print('~~~~~~~~')
         print('--------------------------------------------------------------')
         print('Results computed with the **unofficial** Python eval code.')

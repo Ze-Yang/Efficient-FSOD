@@ -9,6 +9,14 @@ from torch.nn import functional as F
 from detectron2.layers import batched_nms, cat
 from detectron2.structures import Boxes, Instances
 from detectron2.utils.events import get_event_storage
+from detectron2.utils.registry import Registry
+
+ROI_BOX_PREDICTOR_REGISTRY = Registry("ROI_BOX_PREDICTOR")
+ROI_BOX_PREDICTOR_REGISTRY.__doc__ = """
+Registry for box head predictors, which make box predictions from per-region features.
+
+The registered object will be called with `obj(input_size, num_classes, cls_agnostic_bbox_reg)`.
+"""
 
 logger = logging.getLogger(__name__)
 
@@ -316,6 +324,7 @@ class FastRCNNOutputs(object):
         )
 
 
+@ROI_BOX_PREDICTOR_REGISTRY.register()
 class FastRCNNOutputLayers(nn.Module):
     """
     Two linear layers for predicting Fast R-CNN outputs:
@@ -323,92 +332,148 @@ class FastRCNNOutputLayers(nn.Module):
       (2) classification scores
     """
 
-    def __init__(self, input_size, num_classes, cls_agnostic_bbox_reg, box_dim=4, reweight=False):
+    def __init__(self, cfg, input_size, box_dim=4):
         """
         Args:
+            cfg: config
             input_size (int): channels, or (channels, height, width)
-            num_classes (int): number of foreground classes
-            cls_agnostic_bbox_reg (bool): whether to use class agnostic for bbox regression
             box_dim (int): the dimension of bounding boxes.
                 Example box dimensions: 4 for regular XYXY boxes and 5 for rotated XYWHA boxes
-            reweight (bool): whether reweight or not.
         """
         super(FastRCNNOutputLayers, self).__init__()
 
         if not isinstance(input_size, int):
             input_size = np.prod(input_size)
+        self.num_classes = cfg.MODEL.ROI_HEADS.NUM_CLASSES
+        self.cls_agnostic_bbox_reg = cfg.MODEL.ROI_BOX_HEAD.CLS_AGNOSTIC_BBOX_REG
+        self.setting = cfg.SETTING
+        self.reweight = cfg.MODEL.ROI_HEADS.NAME == 'ReweightedROIHeads'
 
         # The prediction layer for num_classes foreground classes and one background class
         # (hence + 1)
-        self.cls_score = nn.Linear(input_size, 1) if reweight else \
-            nn.Linear(input_size, num_classes + 1)
-        num_bbox_reg_classes = 1 if cls_agnostic_bbox_reg or reweight else num_classes
+        if self.reweight:
+            if self.setting == 'Incremental':
+                self.cls_score = nn.Linear(input_size, 16)
+                self.cls_score_novel = nn.Linear(input_size, 5)
+            else:
+                self.cls_score = nn.Linear(input_size, 1)
+        else:
+            self.cls_score = nn.Linear(input_size, self.num_classes + 1)
+        num_bbox_reg_classes = 1 if self.cls_agnostic_bbox_reg else self.num_classes
         self.bbox_pred = nn.Linear(input_size, num_bbox_reg_classes * box_dim)
-        self.reweight = reweight
-        self.num_classes = num_classes
 
         nn.init.normal_(self.cls_score.weight, std=0.01)
         nn.init.normal_(self.bbox_pred.weight, std=0.001)
-        for l in [self.cls_score, self.bbox_pred]:
+        init_list = [self.cls_score, self.bbox_pred]
+        if self.setting == 'Incremental':
+            nn.init.normal_(self.cls_score_novel.weight, std=0.01)
+            init_list.append(self.cls_score_novel)
+        for l in init_list:
             nn.init.constant_(l.bias, 0)
 
     def forward(self, x):
         if x.dim() > 2 and not self.reweight:
             x = torch.flatten(x, start_dim=1)
-        scores = self.cls_score(x).squeeze(-1) if self.reweight else self.cls_score(x)
-        proposal_deltas = self.bbox_pred(x)[:, :self.num_classes].view(self.bbox_pred(x).shape[0], -1) \
-            if self.reweight else self.bbox_pred(x)
+        if self.setting == 'Incremental':
+            base_bg_score = self.cls_score(x[:, 0])
+            novel_score = self.cls_score_novel(x[:, 1:])
+            novel_score = novel_score[:, range(5), range(5)]
+            scores = torch.cat([base_bg_score[:, :15], novel_score, base_bg_score[:, -1][:, None]], dim=1)
+            base_proposal_deltas = self.bbox_pred(x[:, 0]).unsqueeze(1). \
+                expand(-1, 15, -1).reshape(x.shape[0], -1)
+            novel_proposal_deltas = self.bbox_pred(x[:, 1:]).reshape(x.shape[0], -1)
+            proposal_deltas = torch.cat([base_proposal_deltas, novel_proposal_deltas], dim=1)
+        else:
+            scores = self.cls_score(x).squeeze(-1) if self.reweight else self.cls_score(x)
+            proposal_deltas = self.bbox_pred(x)[:, :self.num_classes].view(self.bbox_pred(x).shape[0], -1) \
+                if self.reweight else self.bbox_pred(x)
         return scores, proposal_deltas
 
 
-class FastRCNNOutputLayers_Incre(nn.Module):
+@ROI_BOX_PREDICTOR_REGISTRY.register()
+class CosineSimOutputLayers(nn.Module):
     """
     Two linear layers for predicting Fast R-CNN outputs:
-      (1) proposal-to-detection box regression deltas
-      (2) classification scores
+    (1) proposal-to-detection box regression deltas (the same as the FastRCNNOutputLayers)
+    (2) classification score is based on cosine_similarity
     """
 
-    def __init__(self, input_size, num_classes, cls_agnostic_bbox_reg, box_dim=4, reweight=False):
+    def __init__(self, cfg, input_size, box_dim=4):
         """
         Args:
+            cfg: config
             input_size (int): channels, or (channels, height, width)
-            num_classes (int): number of foreground classes
-            cls_agnostic_bbox_reg (bool): whether to use class agnostic for bbox regression
             box_dim (int): the dimension of bounding boxes.
                 Example box dimensions: 4 for regular XYXY boxes and 5 for rotated XYWHA boxes
-            reweight (bool): whether reweight or not.
         """
-        super(FastRCNNOutputLayers_Incre, self).__init__()
+        super(CosineSimOutputLayers, self).__init__()
 
         if not isinstance(input_size, int):
             input_size = np.prod(input_size)
+        self.num_classes = cfg.MODEL.ROI_HEADS.NUM_CLASSES
+        self.cls_agnostic_bbox_reg = cfg.MODEL.ROI_BOX_HEAD.CLS_AGNOSTIC_BBOX_REG
+        self.setting = cfg.SETTING
+        self.reweight = cfg.MODEL.ROI_HEADS.NAME == 'ReweightedROIHeads'
+        self.scale = nn.Parameter(torch.ones(1) * cfg.MODEL.ROI_BOX_HEAD.COSINE_SCALE, requires_grad=False)
+        if self.scale == -1:
+            # learnable global scaling factor
+            self.scale = nn.Parameter(torch.ones(1) * 10.0)
 
-        # The prediction layer for num_classes foreground classes and one background class
-        # (hence + 1)
-        self.cls_score = nn.Linear(input_size, 16)
-        self.cls_score_noval = nn.Linear(input_size, 5)
-        # self.cls_score_noval = nn.Linear(input_size, 1)
-        num_bbox_reg_classes = 1 if cls_agnostic_bbox_reg or reweight else num_classes
+        if self.reweight:
+            if self.setting == 'Incremental':
+                self.cls_score = nn.Linear(input_size, 16, bias=False)
+                self.cls_score_novel = nn.Linear(input_size, 5, bias=False)
+            else:
+                self.cls_score = nn.Linear(input_size, 1, bias=False)
+        else:
+            self.cls_score = nn.Linear(input_size, self.num_classes + 1, bias=False)
+
+        num_bbox_reg_classes = 1 if self.cls_agnostic_bbox_reg else self.num_classes
         self.bbox_pred = nn.Linear(input_size, num_bbox_reg_classes * box_dim)
-        self.reweight = reweight
-        self.num_classes = num_classes
 
         nn.init.normal_(self.cls_score.weight, std=0.01)
-        nn.init.normal_(self.cls_score_noval.weight, std=0.01)
         nn.init.normal_(self.bbox_pred.weight, std=0.001)
-        for l in [self.cls_score, self.cls_score_noval, self.bbox_pred]:
+        if self.setting == 'Incremental':
+            nn.init.normal_(self.cls_score_novel.weight, std=0.01)
+        for l in [self.bbox_pred]:
             nn.init.constant_(l.bias, 0)
 
     def forward(self, x):
         if x.dim() > 2 and not self.reweight:
             x = torch.flatten(x, start_dim=1)
-        base_bg_score = self.cls_score(x[:, 0])
-        # noval_score = self.cls_score_noval(x[:, 1:]).squeeze()
-        noval_score = self.cls_score_noval(x[:, 1:])
-        noval_score = noval_score[:, range(5), range(5)]
-        scores = torch.cat([base_bg_score[:, :15], noval_score, base_bg_score[:, -1][:, None]], dim=1)
-        base_proposal_deltas = self.bbox_pred(x[:, 0].unsqueeze(1)). \
-            expand(-1, 15, -1).reshape(self.bbox_pred(x).shape[0], -1)
-        noval_proposal_deltas = self.bbox_pred(x[:, 1:]).reshape(self.bbox_pred(x).shape[0], -1)
-        proposal_deltas = torch.cat([base_proposal_deltas, noval_proposal_deltas], dim=1)
+
+        eps = torch.finfo(torch.float32).eps
+        # normalize the input x along the last dimension
+        x_normalized = x / (x.norm(p=2, dim=-1, keepdim=True) + eps)
+
+        # normalize weight
+        temp_norm = self.cls_score.weight.data.norm(p=2, dim=-1, keepdim=True)
+        self.cls_score.weight.data = self.cls_score.weight.data / (temp_norm + eps)
+        if self.setting == 'Incremental':
+            temp_norm = self.cls_score_novel.weight.data.norm(p=2, dim=-1, keepdim=True)
+            self.cls_score_novel.weight.data = self.cls_score_novel.weight.data / (temp_norm + eps)
+        del temp_norm
+
+        if self.setting == 'Incremental':
+            base_bg_score = self.cls_score(x_normalized[:, 0])
+            novel_score = self.cls_score_novel(x_normalized[:, 1:])
+            novel_score = novel_score[:, range(5), range(5)]
+            scores = torch.cat([base_bg_score[:, :15], novel_score, base_bg_score[:, -1][:, None]], dim=1)
+            base_proposal_deltas = self.bbox_pred(x[:, 0]).unsqueeze(1). \
+                expand(-1, 15, -1).reshape(x.shape[0], -1)
+            novel_proposal_deltas = self.bbox_pred(x[:, 1:]).reshape(x.shape[0], -1)
+            proposal_deltas = torch.cat([base_proposal_deltas, novel_proposal_deltas], dim=1)
+        else:
+            scores = self.cls_score(x_normalized).squeeze(-1) if self.reweight else self.cls_score(x_normalized)
+            proposal_deltas = self.bbox_pred(x)[:, :self.num_classes].view(self.bbox_pred(x).shape[0], -1) \
+                if self.reweight else self.bbox_pred(x)
+        scores = scores * self.scale
         return scores, proposal_deltas
+
+
+def build_predictor(cfg, input_size):
+    """
+    Build a box predictor defined by `cfg.MODEL.ROI_BOX_HEAD.PREDICTOR`.
+    """
+    name = cfg.MODEL.ROI_BOX_HEAD.PREDICTOR
+    return ROI_BOX_PREDICTOR_REGISTRY.get(name)(cfg, input_size)

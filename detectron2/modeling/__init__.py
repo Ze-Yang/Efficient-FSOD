@@ -34,6 +34,7 @@ from .proposal_generator import (
 )
 from .roi_heads import (
     ROI_BOX_HEAD_REGISTRY,
+    ROI_BOX_PREDICTOR_REGISTRY,
     ROI_HEADS_REGISTRY,
     ROI_KEYPOINT_HEAD_REGISTRY,
     ROI_MASK_HEAD_REGISTRY,
@@ -43,6 +44,7 @@ from .roi_heads import (
     build_keypoint_head,
     build_mask_head,
     build_roi_heads,
+    build_predictor
 )
 from .test_time_augmentation import DatasetMapperTTA, GeneralizedRCNNWithTTA
 

@@ -308,6 +308,11 @@ _C.MODEL.ROI_BOX_HEAD.NORM = ""
 _C.MODEL.ROI_BOX_HEAD.CLS_AGNOSTIC_BBOX_REG = False
 # Freeze ROI box heads
 _C.MODEL.ROI_BOX_HEAD.FREEZE = False
+# TODO
+# choose from "FastRCNNOutputLayers" and "CosineSimOutputLayers"
+_C.MODEL.ROI_BOX_HEAD.PREDICTOR = "FastRCNNOutputLayers"
+# scale of cosine similarity (set to -1 for learnable scale)
+_C.MODEL.ROI_BOX_HEAD.COSINE_SCALE = 20.0
 
 # ---------------------------------------------------------------------------- #
 # Cascaded Box Head
@@ -561,6 +566,8 @@ _C.TEST.PRECISE_BN.NUM_ITER = 200
 # ---------------------------------------------------------------------------- #
 # Misc options
 # ---------------------------------------------------------------------------- #
+# 'Transfer' or 'Incremental'
+_C.SETTING = 'Transfer'
 # 1 for pre-training, 2 for fine-tuning
 _C.PHASE = 1
 # 0 for whole VOC classes, 1, 2, 3 for split1, split2, split3 classes respectively.

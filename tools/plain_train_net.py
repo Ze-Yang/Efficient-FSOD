@@ -86,7 +86,7 @@ def init_reweight(cfg, model, data_loader):
     # exit(0)
     cls_feat = torch.sigmoid(torch.stack([x.mean(0) for x in cls_dict_feat.values()], dim=0))
     cls_feat = cls_feat / cls_feat.mean(1)[:, None]
-    if cfg.MODEL.ROI_HEADS.NAME == 'ReweightedROIHeads_Incre':
+    if cfg.SETTING == 'Incremental':
         cls_feat = torch.cat([torch.ones((1, cls_feat.size(1)), device=cls_feat.device), cls_feat[15:]], dim=0)
 
     cls_dict_act = {key: torch.stack(value, dim=0) if value else torch.empty(0, device='cuda')
@@ -100,16 +100,16 @@ def init_reweight(cfg, model, data_loader):
     if comm.get_world_size() > 1:
         # model.module.roi_heads.reweight.weight.data = cls_tensor if cfg.MODEL.MASK_ON else cls_tensor[15:]
         model.module.roi_heads.reweight.weight.data = cls_feat
-        if cfg.MODEL.ROI_HEADS.NAME == 'ReweightedROIHeads_Incre':
-            model.module.roi_heads.box_predictor.cls_score_noval.weight.data = cls_act[15:]
+        if cfg.SETTING == 'Incremental':
+            model.module.roi_heads.box_predictor.cls_score_novel.weight.data = cls_act[15:]
         # else:
         #     cls_act = torch.cat([cls_act, model.module.roi_heads.box_predictor.cls_score.weight[-1][None, :]], dim=0)
         #     model.module.roi_heads.box_predictor.cls_score.weight.data = cls_act
     else:
         # model.roi_heads.reweight.weight.data = cls_tensor if cfg.MODEL.MASK_ON else cls_tensor[15:]
         model.roi_heads.reweight.weight.data = cls_feat
-        if cfg.MODEL.ROI_HEADS.NAME == 'ReweightedROIHeads_Incre':
-            model.roi_heads.box_predictor.cls_score_noval.weight.data = cls_act[15:]
+        if cfg.SETTING == 'Incremental':
+            model.roi_heads.box_predictor.cls_score_novel.weight.data = cls_act[15:]
         # else:
         #     cls_act = torch.cat([cls_act, model.roi_heads.box_predictor.cls_score.weight[-1][None, :]], dim=0)
         #     model.roi_heads.box_predictor.cls_score.weight.data = cls_act
@@ -233,12 +233,12 @@ def do_train(cfg, model, resume=False):
         init_reweight(cfg, model, build_dataloader(cfg, dataset, dataset_dicts))
         if comm.get_world_size() > 1:
             logger.info('Reweight after init: {}'.format(model.module.roi_heads.reweight.weight))
-            if cfg.MODEL.ROI_HEADS.NAME == 'ReweightedROIHeads_Incre':
-                logger.info('Cls_N after init: {}'.format(model.module.roi_heads.box_predictor.cls_score_noval.weight))
+            if cfg.SETTING == 'Incremental':
+                logger.info('Cls_N after init: {}'.format(model.module.roi_heads.box_predictor.cls_score_novel.weight))
         else:
             logger.info('Reweight after init: {}'.format(model.roi_heads.reweight.weight))
-            if cfg.MODEL.ROI_HEADS.NAME == 'ReweightedROIHeads_Incre':
-                logger.info('Cls_N after init: {}'.format(model.roi_heads.box_predictor.cls_score_noval.weight))
+            if cfg.SETTING == 'Incremental':
+                logger.info('Cls_N after init: {}'.format(model.roi_heads.box_predictor.cls_score_novel.weight))
     # elif cfg.PHASE == 2 and cfg.METHOD == 'ft':
     #     # For incremental baseline finetuning
     #     checkpoint = checkpointer._load_file(cfg.LOAD_FILE)

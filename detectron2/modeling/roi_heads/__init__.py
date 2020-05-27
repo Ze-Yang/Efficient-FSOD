@@ -1,5 +1,6 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 from .box_head import ROI_BOX_HEAD_REGISTRY, build_box_head
+from .fast_rcnn import ROI_BOX_PREDICTOR_REGISTRY, build_predictor
 from .keypoint_head import ROI_KEYPOINT_HEAD_REGISTRY, build_keypoint_head
 from .mask_head import ROI_MASK_HEAD_REGISTRY, build_mask_head
 from .roi_heads import (
@@ -7,8 +8,7 @@ from .roi_heads import (
     ROIHeads,
     Res5ROIHeads,
     StandardROIHeads,
-    ReweightedROIHeads_Tf,
-    ReweightedROIHeads_Incre,
+    ReweightedROIHeads,
     build_roi_heads,
     select_foreground_proposals,
 )
