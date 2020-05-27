@@ -1,4 +1,5 @@
 _BASE_: "../Base-RCNN-FPN.yaml"
+#SEED: 100
 MODEL:
   WEIGHTS: "detectron2://ImageNetPretrained/MSRA/R-50.pkl"
   MASK_ON: False
@@ -6,9 +7,10 @@ MODEL:
     DEPTH: 50
   ROI_BOX_HEAD:
     CLS_AGNOSTIC_BBOX_REG: True
+#    PREDICTOR: 'CosineSimOutputLayers'
   ROI_HEADS:
     NUM_CLASSES: 20
-    NAME: 'ReweightedROIHeads_Incre'
+    NAME: 'ReweightedROIHeads'
 INPUT:
   MIN_SIZE_TRAIN: (480, 512, 544, 576, 608, 640, 672, 704, 736, 768, 800)
   MIN_SIZE_TEST: 800
@@ -17,17 +19,24 @@ DATASETS:
   TEST: ('voc_2007_test',)
   SHOT: 5
 SOLVER:
-  STEPS: (600, 800)
-  WARMUP_ITERS: 50
-  MAX_ITER: 900
-  CHECKPOINT_PERIOD: 100
-  BASE_LR: 0.02
+  STEPS: (60, 80)
+  WARMUP_ITERS: 5
+  MAX_ITER: 90
+#  STEPS: (300, 400)
+#  WARMUP_ITERS: 50
+#  MAX_ITER: 500
+  CHECKPOINT_PERIOD: 20
+SETTING: 'Incremental'
 SPLIT: 1
 PHASE: 2
 METHOD: 'ours'
 INIT_ITERS: 50
 LOAD_FILE:
   ./results/VOC_split1_pretrain/model_final.pth
+#  ./results/fewshot/VOC/voc_ours_split1_10shot_2/model_final.pth
 OUTPUT_DIR:
-  ./results/fewshot/VOC/voc_ours_split1_5shot_1_rp1
-#  ./results/fewshot/test
+  ./results/fewshot/VOC/voc_ours_split1_5shot_11
+#  ./results/fewshot/VOC/test
+INSTANCE_SHOT: TRUE
+#TEST:
+#  EVAL_PERIOD: 100

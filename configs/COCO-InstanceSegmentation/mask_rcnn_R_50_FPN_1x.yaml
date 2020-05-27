@@ -5,13 +5,19 @@ MODEL:
   RESNETS:
     DEPTH: 50
   ROI_BOX_HEAD:
-    CLS_AGNOSTIC_BBOX_REG: False
+    CLS_AGNOSTIC_BBOX_REG: True
+#    PREDICTOR: "CosineSimOutputLayers"
   ROI_MASK_HEAD:
     CLS_AGNOSTIC_MASK: True
   ROI_HEADS:
     NUM_CLASSES: 60
+#SOLVER:
+#  STEPS: (30000, 40000)
+#  MAX_ITER: 45000
 DATASETS:
   TRAIN: ('coco_2017_train_nonvoc_split',)
   TEST: ('coco_2017_val_nonvoc_split',)
+#  TRAIN: ('coco_2014_valminusminival_nonvoc_split',)
+#  TEST: ('coco_2017_val_nonvoc_split',)
 OUTPUT_DIR:
-  ./results/test
+  ./results/COCO60_pretrain

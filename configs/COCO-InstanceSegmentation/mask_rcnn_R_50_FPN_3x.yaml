@@ -4,6 +4,17 @@ MODEL:
   MASK_ON: True
   RESNETS:
     DEPTH: 50
+  ROI_BOX_HEAD:
+    CLS_AGNOSTIC_BBOX_REG: True
+  ROI_MASK_HEAD:
+    CLS_AGNOSTIC_MASK: True
+  ROI_HEADS:
+    NUM_CLASSES: 60
 SOLVER:
-  STEPS: (210000, 250000)
-  MAX_ITER: 270000
+  STEPS: (140000, 170000)
+  MAX_ITER: 200000
+DATASETS:
+  TRAIN: ('coco_2017_train_nonvoc_split',)
+  TEST: ('coco_2017_val_nonvoc_split',)
+OUTPUT_DIR:
+  ./results/COCO60_pretrain_3x
