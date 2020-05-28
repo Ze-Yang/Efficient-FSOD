@@ -57,7 +57,8 @@ class DetectionCheckpointer(Checkpointer):
                 c2_conversion=checkpoint.get("__author__", None) == "Caffe2",
             )
             checkpoint["model"] = model_state_dict
-        if self.cfg is not None and self.cfg.SETTING == 'Incremental':
+        if self.cfg is not None and self.cfg.SETTING == 'Incremental' and \
+                self.cfg.MODEL.ROI_HEADS.NAME == 'ReweightedROIHeads':
             logger = logging.getLogger(__name__)
             logger.info("Initializing box_head for novel classes.")
             dict = {}

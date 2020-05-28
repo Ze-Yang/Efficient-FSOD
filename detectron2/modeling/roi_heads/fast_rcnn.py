@@ -365,7 +365,7 @@ class FastRCNNOutputLayers(nn.Module):
         nn.init.normal_(self.cls_score.weight, std=0.01)
         nn.init.normal_(self.bbox_pred.weight, std=0.001)
         init_list = [self.cls_score, self.bbox_pred]
-        if self.setting == 'Incremental':
+        if self.reweight and self.setting == 'Incremental':
             nn.init.normal_(self.cls_score_novel.weight, std=0.01)
             init_list.append(self.cls_score_novel)
         for l in init_list:
@@ -374,7 +374,7 @@ class FastRCNNOutputLayers(nn.Module):
     def forward(self, x):
         if x.dim() > 2 and not self.reweight:
             x = torch.flatten(x, start_dim=1)
-        if self.setting == 'Incremental':
+        if self.reweight and self.setting == 'Incremental':
             base_bg_score = self.cls_score(x[:, 0])
             novel_score = self.cls_score_novel(x[:, 1:])
             novel_score = novel_score[:, range(5), range(5)]
@@ -417,12 +417,13 @@ class CosineSimOutputLayers(nn.Module):
         self.scale = nn.Parameter(torch.ones(1) * cfg.MODEL.ROI_BOX_HEAD.COSINE_SCALE, requires_grad=False)
         if self.scale == -1:
             # learnable global scaling factor
-            self.scale = nn.Parameter(torch.ones(1) * 10.0)
+            self.scale = nn.Parameter(torch.ones(1) * 20.0)
 
         if self.reweight:
             if self.setting == 'Incremental':
                 self.cls_score = nn.Linear(input_size, 16, bias=False)
                 self.cls_score_novel = nn.Linear(input_size, 5, bias=False)
+                nn.init.normal_(self.cls_score_novel.weight, std=0.01)
             else:
                 self.cls_score = nn.Linear(input_size, 1, bias=False)
         else:
@@ -433,8 +434,6 @@ class CosineSimOutputLayers(nn.Module):
 
         nn.init.normal_(self.cls_score.weight, std=0.01)
         nn.init.normal_(self.bbox_pred.weight, std=0.001)
-        if self.setting == 'Incremental':
-            nn.init.normal_(self.cls_score_novel.weight, std=0.01)
         for l in [self.bbox_pred]:
             nn.init.constant_(l.bias, 0)
 
@@ -449,12 +448,12 @@ class CosineSimOutputLayers(nn.Module):
         # normalize weight
         temp_norm = self.cls_score.weight.data.norm(p=2, dim=-1, keepdim=True)
         self.cls_score.weight.data = self.cls_score.weight.data / (temp_norm + eps)
-        if self.setting == 'Incremental':
+        if self.reweight and self.setting == 'Incremental':
             temp_norm = self.cls_score_novel.weight.data.norm(p=2, dim=-1, keepdim=True)
             self.cls_score_novel.weight.data = self.cls_score_novel.weight.data / (temp_norm + eps)
         del temp_norm
 
-        if self.setting == 'Incremental':
+        if self.reweight and self.setting == 'Incremental':
             base_bg_score = self.cls_score(x_normalized[:, 0])
             novel_score = self.cls_score_novel(x_normalized[:, 1:])
             novel_score = novel_score[:, range(5), range(5)]
