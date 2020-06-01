@@ -23,7 +23,7 @@ import os
 from collections import OrderedDict
 import torch
 from torch.nn.parallel import DistributedDataParallel
-from visualize_reweight import tensor_display
+# from visualize_reweight import tensor_display
 
 import detectron2.utils.comm as comm
 from detectron2.checkpoint import DetectionCheckpointer, PeriodicCheckpointer
@@ -63,67 +63,35 @@ def init_reweight(cfg, model, data_loader):
     """
     Initialize reweight parameters.
     """
-    logger.info("Initializing reweight parameters...")
-    cls_dict_feat = {i: [] for i in range(cfg.MODEL.ROI_HEADS.NUM_CLASSES)}
+    logger.info("Initializing cls_score parameters...")
     cls_dict_act = {i: [] for i in range(cfg.MODEL.ROI_HEADS.NUM_CLASSES)}
+    data_loader = iter(data_loader)
     with inference_context(model), torch.no_grad():
-        for data, _ in zip(data_loader, range(cfg.INIT_ITERS)):
-            feat, act = model(data, init=True)
+        for _ in range(cfg.INIT_ITERS):
+            data = next(data_loader)
+            act = model(data, init=True)
             cls_dict_act = {key: cls_dict_act[key] + act[key] for key in cls_dict_act.keys()}
-            cls_dict_feat = {key: cls_dict_feat[key] + feat[key] for key in cls_dict_feat.keys()}  # per image accumulation
-
-    cls_dict_feat = {key: torch.stack(value, dim=0) if value else torch.empty(0, device='cuda')
-                for key, value in cls_dict_feat.items()}  # concat to tensor
-    dict_list = comm.all_gather(cls_dict_feat)  # gather from all GPUs
-    cls_dict_feat = {key: torch.cat([dict_list[i][key] for i in range(len(dict_list))], dim=0)
-                for key in cls_dict_feat.keys()}  # concat the results
-    # if comm.is_main_process():
-    #     file = 'results/support_10shot_in.pkl'
-    #     import pickle
-    #     with open(file, 'wb') as f:
-    #         pickle.dump(cls_dict_feat, f, pickle.HIGHEST_PROTOCOL)
-    # comm.synchronize()
-    # exit(0)
-    cls_feat = torch.sigmoid(torch.stack([x.mean(0) for x in cls_dict_feat.values()], dim=0))
-    cls_feat = cls_feat / cls_feat.mean(1)[:, None]
-    if cfg.SETTING == 'Incremental':
-        cls_feat = torch.cat([torch.ones((1, cls_feat.size(1)), device=cls_feat.device), cls_feat[15:]], dim=0)
+    del data_loader
 
     cls_dict_act = {key: torch.stack(value, dim=0) if value else torch.empty(0, device='cuda')
                      for key, value in cls_dict_act.items()}  # concat to tensor
     dict_list = comm.all_gather(cls_dict_act)  # gather from all GPUs
     cls_dict_act = {key: torch.cat([dict_list[i][key] for i in range(len(dict_list))], dim=0)
                      for key in cls_dict_act.keys()}  # concat the results
+    # if cfg.MODEL.ROI_BOX_HEAD.PREDICTOR == 'CosineSimOutputLayers':
+    eps = torch.finfo(torch.float32).eps
+    # cls_act = torch.stack([(x / (x.norm(dim=1, keepdim=True) + eps)).mean(0)
+    #                        for x in cls_dict_act.values()], dim=0)
     cls_act = torch.stack([x.mean(0) for x in cls_dict_act.values()], dim=0)
-    cls_act = cls_act / cls_act.norm(dim=1)[:, None]
+    cls_act = cls_act / (cls_act.norm(dim=1, keepdim=True) + eps)
+    # else:
+    #     cls_act = torch.stack([x.mean(0) for x in cls_dict_act.values()], dim=0)
+    if cfg.SETTING == 'Incremental':
+        cls_act = cls_act[15:]
 
-    if comm.get_world_size() > 1:
-        # model.module.roi_heads.reweight.weight.data = cls_tensor if cfg.MODEL.MASK_ON else cls_tensor[15:]
-        model.module.roi_heads.reweight.weight.data = cls_feat
-        if cfg.SETTING == 'Incremental':
-            model.module.roi_heads.box_predictor.cls_score_novel.weight.data = cls_act[15:]
-        # else:
-        #     cls_act = torch.cat([cls_act, model.module.roi_heads.box_predictor.cls_score.weight[-1][None, :]], dim=0)
-        #     model.module.roi_heads.box_predictor.cls_score.weight.data = cls_act
-    else:
-        # model.roi_heads.reweight.weight.data = cls_tensor if cfg.MODEL.MASK_ON else cls_tensor[15:]
-        model.roi_heads.reweight.weight.data = cls_feat
-        if cfg.SETTING == 'Incremental':
-            model.roi_heads.box_predictor.cls_score_novel.weight.data = cls_act[15:]
-        # else:
-        #     cls_act = torch.cat([cls_act, model.roi_heads.box_predictor.cls_score.weight[-1][None, :]], dim=0)
-        #     model.roi_heads.box_predictor.cls_score.weight.data = cls_act
-            # logger.info(cls_act.size(), model.roi_heads.box_predictor.cls_score.weight.data.size())
-
-    num_cls = [value.size(0) for value in cls_dict_feat.values()]
-    logger.info('{}'.format(num_cls))
-    del cls_dict_feat
     del dict_list
-    del num_cls
-    del cls_feat
     del cls_dict_act
-    del cls_act
-    return None
+    return cls_act
 
 
 def get_evaluator(cfg, dataset_name, output_folder=None):
@@ -239,6 +207,47 @@ def do_train(cfg, model, resume=False):
             logger.info('Reweight after init: {}'.format(model.roi_heads.reweight.weight))
             if cfg.SETTING == 'Incremental':
                 logger.info('Cls_N after init: {}'.format(model.roi_heads.box_predictor.cls_score_novel.weight))
+    elif cfg.PHASE == 2 and cfg.METHOD == 'imprinted':
+        cls_novel = init_reweight(cfg, model, build_dataloader(cfg, dataset, dataset_dicts))
+        checkpoint = checkpointer._load_file(cfg.LOAD_FILE)
+        checkpoint_state_dict = checkpoint.pop("model")
+        cls_score = checkpoint_state_dict['roi_heads.box_predictor.cls_score.weight']
+        if cfg.MODEL.ROI_BOX_HEAD.PREDICTOR == 'CosineSimOutputLayers':
+            eps = torch.finfo(torch.float32).eps
+            cls_score_norm = cls_score / (cls_score.norm(dim=1, keepdim=True) + eps)
+            cls_base, cls_bg = cls_score_norm.split([15, 1], dim=0)
+        else:
+            cls_base, cls_bg = cls_score.split([15, 1], dim=0)
+            bias = checkpoint_state_dict['roi_heads.box_predictor.cls_score.bias']
+            bias_base, bias_bg = bias.split([15, 1])
+        if comm.get_world_size() > 1:
+            cls_score = model.module.roi_heads.box_predictor.cls_score.weight.data
+            cls_score[:15] = cls_base
+            cls_score[15:20] = cls_novel
+            cls_score[-1] = cls_bg
+            model.module.roi_heads.box_predictor.cls_score.weight.data = cls_score
+            if cfg.MODEL.ROI_BOX_HEAD.PREDICTOR == 'FastRCNNOutputLayers':
+                bias = model.module.roi_heads.box_predictor.cls_score.bias.data
+                bias[:15] = bias_base
+                bias[-1] = bias_bg
+                model.module.roi_heads.box_predictor.cls_score.bias.data = bias
+        else:
+            cls_score = model.roi_heads.box_predictor.cls_score.weight.data
+            # logger.info('ram_norm:{}'.format(cls_score.norm(dim=-1).mean()))
+            # logger.info('ram_var:{}'.format(cls_score.var(dim=-1).mean()))
+            cls_score[:15] = cls_base
+            cls_score[15:20] = cls_novel
+            cls_score[-1] = cls_bg
+            # logger.info('base_norm:{}'.format(cls_base.norm(dim=-1).mean()))
+            # logger.info('base_var:{}'.format(cls_base.var(dim=-1).mean()))
+            # logger.info('novel_norm:{}'.format(cls_novel.norm(dim=-1).mean()))
+            # logger.info('novel_var:{}'.format(cls_novel.var(dim=-1).mean()))
+            model.roi_heads.box_predictor.cls_score.weight.data = cls_score
+            if cfg.MODEL.ROI_BOX_HEAD.PREDICTOR == 'FastRCNNOutputLayers':
+                bias = model.roi_heads.box_predictor.cls_score.bias.data
+                bias[:15] = bias_base
+                bias[-1] = bias_bg
+                model.roi_heads.box_predictor.cls_score.bias.data = bias
     # elif cfg.PHASE == 2 and cfg.METHOD == 'ft':
     #     # For incremental baseline finetuning
     #     checkpoint = checkpointer._load_file(cfg.LOAD_FILE)

@@ -553,11 +553,13 @@ class StandardROIHeads(ROIHeads):
         See :class:`ROIHeads.forward`.
         """
         del images
+        features_list = [features[f] for f in self.in_features]
         if self.training:
             proposals = self.label_and_sample_proposals(proposals, targets)
+        else:
+            if targets is not None:  # for cls_score parameters initialization
+                return self._init_weight(features_list, targets)
         del targets
-
-        features_list = [features[f] for f in self.in_features]
 
         if self.training:
             losses = self._forward_box(features_list, proposals)
@@ -572,6 +574,18 @@ class StandardROIHeads(ROIHeads):
             # applied to the top scoring box detections.
             pred_instances = self.forward_with_given_boxes(features, pred_instances)
             return pred_instances, {}
+
+    def _init_weight(self, features, targets):
+        box_features = self.box_pooler(features, [x.gt_boxes for x in targets])
+        activations = self.box_head(box_features)
+        gt_classes = torch.cat([x.gt_classes for x in targets], dim=0)
+        keep = gt_classes != -1
+        activations = activations[keep]
+        gt_classes = gt_classes[keep].tolist()
+        cls_dict_act = {i: [] for i in range(self.num_classes)}
+        for i in range(len(gt_classes)):
+            cls_dict_act[gt_classes[i]].append(activations[i])
+        return cls_dict_act
 
     def forward_with_given_boxes(self, features, instances):
         """
