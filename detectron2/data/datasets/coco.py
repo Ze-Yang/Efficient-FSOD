@@ -152,7 +152,21 @@ Category ids in annotations are not in [1, #categories]! We'll apply a mapping f
     #     logger.info("Randomly selecting {} images in COCO format from {} for {} shot setting".
     #                 format(len(imgs_anns), json_file, cfg.DATASETS.SHOT))
 
+    # for image-shot json file generation
+    # images, annotations = zip(*imgs_anns)
+    # annotations = list(itertools.chain.from_iterable(annotations))
+    # coco_dict = dict()
+    # coco_dict['images'] = images
+    # coco_dict['annotations'] = annotations
+    # coco_dict['categories'] = coco_api.dataset['categories']
+    # output_file = f'coco_im_{cfg.DATASETS.SHOT}shot.json'
+    # with PathManager.open(output_file, "w") as json_file:
+    #     logger.info(f"Caching annotations in COCO format: {output_file}")
+    #     json.dump(coco_dict, json_file)
+
     # random.shuffle(imgs_anns)
+    # images = []
+    # annotations = []
     cls_num = {i: 0 for i in id_of_int}
     for (img_dict, anno_dict_list) in imgs_anns:
         record = {}
@@ -212,12 +226,15 @@ Category ids in annotations are not in [1, #categories]! We'll apply a mapping f
             if id_map:
                 if 'train' in dataset_name and cfg.PHASE == 2:
                     obj["category_id"] = id_map[cls_id] if cls_id != -1 else -1
+                    # anno["category_id"] = cls_id
                 else:
                     obj["category_id"] = id_map[obj["category_id"]]
             objs.append(obj)
         if 'train' in dataset_name and cfg.PHASE == 2:
             # if not all([obj["category_id"] == -1 for obj in objs]):
             if find:
+                # images.append(img_dict)
+                # annotations.append(anno_dict_list)
                 record["annotations"] = objs
                 dataset_dicts.append(record)
             if min(cls_num.values()) == cfg.DATASETS.SHOT:
@@ -230,6 +247,17 @@ Category ids in annotations are not in [1, #categories]! We'll apply a mapping f
         #     objs.append(obj)
         # record["annotations"] = objs
         # dataset_dicts.append(record)
+
+    # for instance-shot json file generation
+    # annotations = list(itertools.chain.from_iterable(annotations))
+    # coco_dict = dict()
+    # coco_dict['images'] = images
+    # coco_dict['annotations'] = annotations
+    # coco_dict['categories'] = coco_api.dataset['categories']
+    # output_file = f'coco_in_{cfg.DATASETS.SHOT}shot.json'
+    # with PathManager.open(output_file, "w") as json_file:
+    #     logger.info(f"Caching annotations in COCO format: {output_file}")
+    #     json.dump(coco_dict, json_file)
 
     if num_instances_without_valid_segmentation > 0:
         logger.warning(
