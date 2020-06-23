@@ -6,6 +6,7 @@ import logging
 import detectron2.utils.comm as comm
 import os
 from .c2_model_loading import align_and_update_state_dicts
+from typing import List, Optional
 
 
 class DetectionCheckpointer(Checkpointer):
@@ -68,9 +69,9 @@ class DetectionCheckpointer(Checkpointer):
                     dict[key] = value
             checkpoint["model"].update(dict)
         # for non-caffe2 models, use standard ways to load it
-        super()._load_model(checkpoint)
+        return super()._load_model(checkpoint)
 
-    def load(self, path: str):
+    def load(self, path: str, checkpointables: Optional[List[str]] = None) -> object:
         """
         Load from the given checkpoint. When path points to network file, this
         function has to be called on all ranks.
@@ -78,6 +79,8 @@ class DetectionCheckpointer(Checkpointer):
         Args:
             path (str): path or url to the checkpoint. If empty, will not load
                 anything.
+            checkpointables (list): List of checkpointable names to load. If not
+                specified (None), will load all the possible checkpointables.
         Returns:
             dict:
                 extra data loaded from the checkpoint that has not been
@@ -86,9 +89,7 @@ class DetectionCheckpointer(Checkpointer):
         """
         if not path:
             # no checkpoint provided
-            self.logger.info(
-                "No checkpoint found. Initializing model from scratch"
-            )
+            self.logger.info("No checkpoint found. Initializing model from scratch")
             return {}
         self.logger.info("Loading checkpoint from {}".format(path))
         if not os.path.isfile(path):
@@ -96,14 +97,19 @@ class DetectionCheckpointer(Checkpointer):
             assert os.path.isfile(path), "Checkpoint {} not found!".format(path)
 
         checkpoint = self._load_file(path)
-        self._load_model(checkpoint)
+        incompatible = self._load_model(checkpoint)
+        if (
+            incompatible is not None
+        ):  # handle some existing subclasses that returns None
+            self._log_incompatible_keys(incompatible)
+
         if self.phase == 2:
-            self.checkpointables = {}
             checkpoint.pop('iteration')
-        for key, obj in self.checkpointables.items():
-            if key in checkpoint:
+        for key in self.checkpointables if checkpointables is None else checkpointables:
+            if key in checkpoint:  # pyre-ignore
                 self.logger.info("Loading {} from {}".format(key, path))
-                obj.load_state_dict(checkpoint.pop(key))
+                obj = self.checkpointables[key]
+                obj.load_state_dict(checkpoint.pop(key))  # pyre-ignore
 
         # return any further checkpoint data
         return checkpoint
