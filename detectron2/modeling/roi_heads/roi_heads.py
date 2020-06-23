@@ -338,9 +338,7 @@ class Res5ROIHeads(ROIHeads):
         )
 
         self.res5, out_channels = self._build_res5_block(cfg)
-        self.box_predictor = FastRCNNOutputLayers(
-            out_channels, self.num_classes, self.cls_agnostic_bbox_reg
-        )
+        self.box_predictor = build_predictor(cfg, out_channels)
 
         if self.mask_on:
             self.mask_head = build_mask_head(
