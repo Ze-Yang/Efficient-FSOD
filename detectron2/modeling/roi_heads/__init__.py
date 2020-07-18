@@ -1,4 +1,5 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
+from .meta_head import ROI_META_HEAD_REGISTRY, build_meta_head
 from .box_head import ROI_BOX_HEAD_REGISTRY, build_box_head
 from .fast_rcnn import ROI_BOX_PREDICTOR_REGISTRY, build_predictor
 from .keypoint_head import ROI_KEYPOINT_HEAD_REGISTRY, build_keypoint_head

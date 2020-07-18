@@ -371,7 +371,7 @@ class FastRCNNOutputLayers(nn.Module):
         for l in init_list:
             nn.init.constant_(l.bias, 0)
 
-    def forward(self, x):
+    def forward(self, x, new_weight):
         if x.dim() > 2 and not self.reweight:
             x = torch.flatten(x, start_dim=1)
         if self.reweight and self.setting == 'Incremental':
@@ -384,7 +384,11 @@ class FastRCNNOutputLayers(nn.Module):
             novel_proposal_deltas = self.bbox_pred(x[:, 1:]).reshape(x.shape[0], -1)
             proposal_deltas = torch.cat([base_proposal_deltas, novel_proposal_deltas], dim=1)
         else:
-            scores = self.cls_score(x).squeeze(-1) if self.reweight else self.cls_score(x)
+            if new_weight is not None:
+                scores = x.mm(new_weight.t()) + self.cls_score.bias
+            else:
+                scores = self.cls_score(x)
+            # scores = self.cls_score(x).squeeze(-1) if self.reweight else self.cls_score(x)
             proposal_deltas = self.bbox_pred(x)[:, :self.num_classes].view(self.bbox_pred(x).shape[0], -1) \
                 if self.reweight else self.bbox_pred(x)
         return scores, proposal_deltas

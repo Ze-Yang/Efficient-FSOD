@@ -3,8 +3,10 @@ import logging
 import numpy as np
 from typing import Dict
 import torch
+import torch.nn.functional as F
 from torch import nn
 
+import detectron2.utils.comm as comm
 from detectron2.layers import ShapeSpec
 from detectron2.structures import Boxes, Instances, pairwise_iou
 from detectron2.utils.events import get_event_storage
@@ -17,6 +19,7 @@ from ..poolers import ROIPooler
 from ..proposal_generator.proposal_utils import add_ground_truth_to_proposals
 from ..sampling import subsample_labels
 from .box_head import build_box_head
+from .meta_head import build_meta_head
 from .fast_rcnn import build_predictor, FastRCNNOutputs
 from .keypoint_head import build_keypoint_head, keypoint_rcnn_inference, keypoint_rcnn_loss
 from .mask_head import build_mask_head, mask_rcnn_inference, mask_rcnn_loss
@@ -465,9 +468,42 @@ class StandardROIHeads(ROIHeads):
 
     def __init__(self, cfg, input_shape):
         super(StandardROIHeads, self).__init__(cfg, input_shape)
+        self._init_meta_head(cfg)
         self._init_box_head(cfg)
         self._init_mask_head(cfg)
         self._init_keypoint_head(cfg)
+
+    def _init_meta_head(self, cfg):
+        # fmt: off
+        self.meta_on = cfg.MODEL.META_ON
+        if not self.meta_on:
+            return
+        # Number of images per GPU that will be used to predict meta weight.
+        self.ims_per_gpu = cfg.MODEL.ROI_META_HEAD.IMS_PER_GPU
+        self.momentum = cfg.MODEL.ROI_META_HEAD.MOMENTUM
+
+        pooler_resolution = cfg.MODEL.ROI_META_HEAD.POOLER_RESOLUTION
+        pooler_scales = tuple(1.0 / self.feature_strides[k] for k in self.in_features)
+        sampling_ratio = cfg.MODEL.ROI_META_HEAD.POOLER_SAMPLING_RATIO
+        pooler_type = cfg.MODEL.ROI_META_HEAD.POOLER_TYPE
+        # fmt: on
+
+        # If StandardROIHeads is applied on multiple feature maps (as in FPN),
+        # then we share the same predictors and therefore the channel counts must be the same
+        in_channels = [self.feature_channels[f] for f in self.in_features]
+        # Check all channel counts are equal
+        assert len(set(in_channels)) == 1, in_channels
+        in_channels = in_channels[0]
+
+        self.meta_pooler = ROIPooler(
+            output_size=pooler_resolution,
+            scales=pooler_scales,
+            sampling_ratio=sampling_ratio,
+            pooler_type=pooler_type,
+        )
+        self.meta_head = build_meta_head(
+            cfg, ShapeSpec(channels=in_channels, height=pooler_resolution, width=pooler_resolution)
+        )
 
     def _init_box_head(self, cfg):
         # fmt: off
@@ -554,12 +590,13 @@ class StandardROIHeads(ROIHeads):
         features_list = [features[f] for f in self.in_features]
         if self.training:
             proposals = self.label_and_sample_proposals(proposals, targets)
-        else:
-            if targets is not None:  # for cls_score parameters initialization
-                return self._init_weight(features_list, targets)
-        del targets
 
         if self.training:
+            if self.meta_on:
+                self._forward_meta(features_list, targets)
+                features_list = [x[self.ims_per_gpu:] for x in features_list]
+                proposals = proposals[self.ims_per_gpu:]
+            del targets
             losses = self._forward_box(features_list, proposals)
             # During training the proposals used by the box head are
             # used by the mask, keypoint (and densepose) heads.
@@ -567,6 +604,9 @@ class StandardROIHeads(ROIHeads):
             losses.update(self._forward_keypoint(features_list, proposals))
             return proposals, losses
         else:
+            if targets is not None:  # for cls_score parameters initialization
+                return self._init_weight(features_list, targets)
+            del targets
             pred_instances = self._forward_box(features_list, proposals)
             # During inference cascaded prediction is used: the mask and keypoints heads are only
             # applied to the top scoring box detections.
@@ -583,6 +623,7 @@ class StandardROIHeads(ROIHeads):
         cls_dict_act = {i: [] for i in range(self.num_classes)}
         for i in range(len(gt_classes)):
             cls_dict_act[gt_classes[i]].append(activations[i])
+        del targets
         return cls_dict_act
 
     def forward_with_given_boxes(self, features, instances):
@@ -611,6 +652,41 @@ class StandardROIHeads(ROIHeads):
         instances = self._forward_keypoint(features, instances)
         return instances
 
+    def _forward_meta(self, features, targets):
+        """
+        Forward logic of the weight prediction branch.
+
+        Args:
+            features (list[Tensor]): #level input features for weight prediction
+            targets (list[Instances]): the per-image object ground truth.
+                Each has fields "gt_classes", "gt_boxes".
+        """
+        meta_features = self.meta_pooler([x[:self.ims_per_gpu] for x in features],
+                                         [x.gt_boxes for x in targets[:self.ims_per_gpu]])
+        local_meta_weight = self.meta_head(meta_features)
+        local_gt_classes = torch.cat([x.gt_classes for x in targets[:self.ims_per_gpu]], dim=0)
+        keep = local_gt_classes != -1
+        local_meta_weight = local_meta_weight[keep]
+        local_gt_classes = local_gt_classes[keep]
+        meta_weight_list = comm.all_gather_grad(local_meta_weight)
+        gt_classes_list = comm.all_gather_grad(local_gt_classes)
+        global_meta_weight = torch.cat(meta_weight_list, dim=0)
+        global_gt_classes = torch.cat(gt_classes_list, dim=0).tolist()
+        meta_weight = [torch.empty(0, device='cuda') for _ in range(self.num_classes)]
+
+        # ensure the variables on the same device
+        assert all([x.device == global_meta_weight.device for x in meta_weight]), \
+            f'Variable {global_meta_weight} and {meta_weight} should be on the same device.'
+        for i, gt_cls in enumerate(global_gt_classes):
+            meta_weight[gt_cls] = torch.cat((meta_weight[gt_cls], global_meta_weight[i][None, :]), dim=0)
+
+        meta_weight = [F.normalize(x, dim=1).mean(0) if torch.numel(x)
+                      else torch.zeros(global_meta_weight.size(1), device='cuda') for x in meta_weight]
+        meta_weight = torch.stack(meta_weight, dim=0)
+        self.new_weight = self.box_predictor.cls_score.weight.clone()
+        self.new_weight[:-1] = self.momentum * self.new_weight[:-1] + \
+                               (1 - self.momentum) * meta_weight
+
     def _forward_box(self, features, proposals):
         """
         Forward logic of the box prediction branch.
@@ -628,7 +704,8 @@ class StandardROIHeads(ROIHeads):
         """
         box_features = self.box_pooler(features, [x.proposal_boxes for x in proposals])
         box_features = self.box_head(box_features)
-        pred_class_logits, pred_proposal_deltas = self.box_predictor(box_features)
+        pred_class_logits, pred_proposal_deltas = self.box_predictor(
+            box_features, self.new_weight if hasattr(self, 'new_weight') else None)
         del box_features
 
         outputs = FastRCNNOutputs(

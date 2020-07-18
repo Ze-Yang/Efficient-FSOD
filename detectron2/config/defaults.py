@@ -23,6 +23,7 @@ _C.VERSION = 2
 
 _C.MODEL = CN()
 _C.MODEL.LOAD_PROPOSALS = False
+_C.MODEL.META_ON = False
 _C.MODEL.MASK_ON = False
 _C.MODEL.KEYPOINT_ON = False
 _C.MODEL.DEVICE = "cuda"
@@ -279,6 +280,33 @@ _C.MODEL.ROI_HEADS.PROPOSAL_APPEND_GT = True
 
 
 # ---------------------------------------------------------------------------- #
+# Meta Head
+# ---------------------------------------------------------------------------- #
+_C.MODEL.ROI_META_HEAD = CN()
+# Number of images per GPU that will be used to predict meta weight.
+_C.MODEL.ROI_META_HEAD.IMS_PER_GPU = 2
+_C.MODEL.ROI_META_HEAD.NAME = 'MetaConvFCHead'
+_C.MODEL.ROI_META_HEAD.POOLER_RESOLUTION = 7
+_C.MODEL.ROI_META_HEAD.POOLER_SAMPLING_RATIO = 0
+# Type of pooling operation applied to the incoming feature map for each RoI
+_C.MODEL.ROI_META_HEAD.POOLER_TYPE = "ROIAlignV2"
+
+_C.MODEL.ROI_META_HEAD.NUM_FC = 1
+# Hidden layer dimension for FC layers in the RoI meta head
+_C.MODEL.ROI_META_HEAD.FC_DIM = 1024
+_C.MODEL.ROI_META_HEAD.NUM_CONV = 1
+# Channel dimension for Conv layers in the RoI meta head
+_C.MODEL.ROI_META_HEAD.CONV_DIM = 512
+# Indicate the stride of each Conv layer as a list
+_C.MODEL.ROI_META_HEAD.STRIDE = [2]
+# Normalization method for the convolution layers.
+# Options: "" (no norm), "GN", "SyncBN".
+_C.MODEL.ROI_META_HEAD.NORM = ""
+# Momentum for updating the classifier weight
+_C.MODEL.ROI_META_HEAD.MOMENTUM = 0.99
+
+
+# ---------------------------------------------------------------------------- #
 # Box Head
 # ---------------------------------------------------------------------------- #
 _C.MODEL.ROI_BOX_HEAD = CN()
@@ -308,7 +336,6 @@ _C.MODEL.ROI_BOX_HEAD.NORM = ""
 _C.MODEL.ROI_BOX_HEAD.CLS_AGNOSTIC_BBOX_REG = False
 # Freeze ROI box heads
 _C.MODEL.ROI_BOX_HEAD.FREEZE = False
-# TODO
 # choose from "FastRCNNOutputLayers" and "CosineSimOutputLayers"
 _C.MODEL.ROI_BOX_HEAD.PREDICTOR = "FastRCNNOutputLayers"
 # scale of cosine similarity (set to -1 for learnable scale)
