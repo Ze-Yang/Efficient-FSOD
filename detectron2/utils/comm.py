@@ -10,6 +10,7 @@ import numpy as np
 import pickle
 import torch
 import torch.distributed as dist
+from torch.autograd import Function
 
 _LOCAL_PROCESS_GROUP = None
 """
@@ -287,3 +288,49 @@ def reduce_dict(input_dict, average=True):
             values /= world_size
         reduced_dict = {k: v for k, v in zip(names, values)}
     return reduced_dict
+
+
+class AllGatherFunc(Function):
+    @staticmethod
+    def forward(ctx, tensor, group):
+        ctx.save_for_backward(tensor)
+        ctx.group = group
+
+        gather_list = [torch.zeros_like(tensor, dtype=tensor.dtype, device=tensor.device)
+                       for _ in range(dist.get_world_size(group))]
+        dist.all_gather(gather_list, tensor, group)
+        return tuple(gather_list)
+
+    @staticmethod
+    def backward(ctx, *grads):
+        input, = ctx.saved_tensors
+        grad_out = torch.zeros_like(input)
+        dist.reduce_scatter(grad_out, list(grads), group=ctx.group)
+        return grad_out, None
+
+
+def all_gather_grad(tensor, group=dist.group.WORLD):
+    """
+    Run all_gather tensors with autograd.
+
+    Args:
+        tensor: torch tensor
+        group: a torch process group. By default, will use a group which
+            contains all ranks on gloo backend.
+
+    Returns:
+        list[data]: list of data gathered from each rank
+    """
+    if get_world_size() == 1:
+        return [tensor]
+    if dist.get_world_size(group) == 1:
+        return [tensor]
+    assert torch.is_tensor(tensor), 'Function all_gather_grad only supports tensor input.'
+
+    size_list, tensor = _pad_to_largest_tensor(tensor, group)
+    tensor_list = list(AllGatherFunc.apply(tensor, group))
+    for i, size in enumerate(size_list):
+        tensor_list[i] = tensor_list[i][:size]
+    return tensor_list
+
+
