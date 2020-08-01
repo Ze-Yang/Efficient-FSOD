@@ -167,8 +167,7 @@ def do_train(cfg, model, resume=False):
         model, cfg.OUTPUT_DIR, cfg, optimizer=optimizer, scheduler=scheduler
     )
     start_iter = (
-        checkpointer.resume_or_load(cfg.LOAD_FILE, resume=resume).get("iteration", -1) + 1 if cfg.PHASE == 2 \
-        else checkpointer.resume_or_load(cfg.MODEL.WEIGHTS, resume=resume).get("iteration", -1) + 1
+        checkpointer.resume_or_load(cfg.MODEL.WEIGHTS, resume=resume).get("iteration", -1) + 1
     )
     max_iter = cfg.SOLVER.MAX_ITER
 
@@ -209,7 +208,7 @@ def do_train(cfg, model, resume=False):
                 logger.info('Cls_N after init: {}'.format(model.roi_heads.box_predictor.cls_score_novel.weight))
     elif cfg.PHASE == 2 and cfg.METHOD == 'imprinted':
         cls_novel = init_reweight(cfg, model, build_dataloader(cfg, dataset, dataset_dicts))
-        checkpoint = checkpointer._load_file(cfg.LOAD_FILE)
+        checkpoint = checkpointer._load_file(cfg.MODEL.WEIGHTS)
         checkpoint_state_dict = checkpoint.pop("model")
         cls_score = checkpoint_state_dict['roi_heads.box_predictor.cls_score.weight']
         if cfg.MODEL.ROI_BOX_HEAD.PREDICTOR == 'CosineSimOutputLayers':
@@ -250,7 +249,7 @@ def do_train(cfg, model, resume=False):
                 model.roi_heads.box_predictor.cls_score.bias.data = bias
     # elif cfg.PHASE == 2 and cfg.METHOD == 'ft':
     #     # For incremental baseline finetuning
-    #     checkpoint = checkpointer._load_file(cfg.LOAD_FILE)
+    #     checkpoint = checkpointer._load_file(cfg.MODEL.WEIGHTS)
     #     checkpoint_state_dict = checkpoint.pop("model")
     #     cls_score = checkpoint_state_dict['roi_heads.box_predictor.cls_score.weight']
     #     if comm.get_world_size() > 1:
@@ -330,7 +329,7 @@ def main(args):
     logger.info("Model:\n{}".format(model))
     if args.eval_only:
         DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
-            cfg.LOAD_FILE, resume=args.resume
+            cfg.MODEL.WEIGHTS, resume=args.resume
         )
         return do_test(cfg, model, args)
 

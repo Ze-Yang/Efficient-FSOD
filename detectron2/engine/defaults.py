@@ -283,12 +283,7 @@ class DefaultTrainer(SimpleTrainer):
         # at the next iteration (or iter zero if there's no checkpoint).
         ### TODO
         self.start_iter = (
-            self.checkpointer.resume_or_load(self.cfg.LOAD_FILE, resume=True).get("iteration", -1) + 1
-            if self.cfg.PHASE == 2
-            else self.checkpointer.resume_or_load(self.cfg.MODEL.WEIGHTS, resume=resume).get(
-                "iteration", -1
-            )
-            + 1
+            self.checkpointer.resume_or_load(self.cfg.MODEL.WEIGHTS, resume=resume).get("iteration", -1) + 1
         )
 
     def build_hooks(self):

@@ -1,7 +1,7 @@
 _BASE_: "../Base-RCNN-FPN.yaml"
 #SEED: 100
 MODEL:
-  WEIGHTS: "detectron2://ImageNetPretrained/MSRA/R-50.pkl"
+  WEIGHTS: "./results/VOC_split1_pretrain/model_final.pth"
   MASK_ON: False
   RESNETS:
     DEPTH: 50
@@ -34,9 +34,6 @@ SPLIT: 1
 PHASE: 2
 METHOD: 'imprinted'
 INIT_ITERS: 50
-LOAD_FILE:
-  ./results/VOC_split1_pretrain/model_final.pth
-#  ./results/fewshot/VOC/voc_ours_split1_10shot_2/model_final.pth
 OUTPUT_DIR:
   ./results/fewshot/VOC/VOC_imprinted_split1_3
 #  ./results/fewshot/VOC/test
