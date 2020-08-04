@@ -759,10 +759,10 @@ class ReweightedROIHeads(StandardROIHeads):
         self.box_head = build_box_head(
             cfg, ShapeSpec(channels=in_channels, height=pooler_resolution, width=pooler_resolution)
         )
-        if cfg.SETTING == 'Incremental':
-            self.box_head_novel = build_box_head(
-                cfg, ShapeSpec(channels=in_channels, height=pooler_resolution, width=pooler_resolution)
-            )
+        # if cfg.SETTING == 'Incremental':
+        #     self.box_head_novel = build_box_head(
+        #         cfg, ShapeSpec(channels=in_channels, height=pooler_resolution, width=pooler_resolution)
+        #     )
         self.box_predictor = build_predictor(cfg, self.box_head.output_size)
 
     def _init_reweight_layer(self):
@@ -850,11 +850,12 @@ class ReweightedROIHeads(StandardROIHeads):
             box_features = self.box_head(box_features)
         elif self.setting == 'Incremental':
             box_features = self.reweight.weight[:, :, None, None] * box_features.unsqueeze(1)
-            base_box_features = box_features[:, 0].unsqueeze(1)
-            novel_box_features = box_features[:, 1:]
-            base_box_features = self.box_head(base_box_features)
-            novel_box_features = self.box_head_novel(novel_box_features)
-            box_features = torch.cat((base_box_features, novel_box_features), dim=1)
+            box_features = self.box_head(box_features)
+            # base_box_features = box_features[:, 0].unsqueeze(1)
+            # novel_box_features = box_features[:, 1:]
+            # base_box_features = self.box_head(base_box_features)
+            # novel_box_features = self.box_head_novel(novel_box_features)
+            # box_features = torch.cat((base_box_features, novel_box_features), dim=1)
         else:
             raise ValueError("Unsupported setting: {}".format(self.setting))
         pred_class_logits, pred_proposal_deltas = self.box_predictor(box_features)
