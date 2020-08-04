@@ -441,17 +441,13 @@ class CosineSimOutputLayers(nn.Module):
         if x.dim() > 2 and not self.reweight:
             x = torch.flatten(x, start_dim=1)
 
-        eps = torch.finfo(torch.float32).eps
         # normalize the input x along the last dimension
-        x_normalized = x / (x.norm(p=2, dim=-1, keepdim=True) + eps)
+        x_normalized = F.normalize(x, dim=-1)
 
         # normalize weight
-        temp_norm = self.cls_score.weight.data.norm(p=2, dim=-1, keepdim=True)
-        self.cls_score.weight.data = self.cls_score.weight.data / (temp_norm + eps)
+        self.cls_score.weight.data = F.normalize(self.cls_score.weight.data, dim=-1)
         if self.reweight and self.setting == 'Incremental':
-            temp_norm = self.cls_score_novel.weight.data.norm(p=2, dim=-1, keepdim=True)
-            self.cls_score_novel.weight.data = self.cls_score_novel.weight.data / (temp_norm + eps)
-        del temp_norm
+            self.cls_score_novel.weight.data = F.normalize(self.cls_score_novel.weight.data, dim=-1)
 
         if self.reweight and self.setting == 'Incremental':
             base_bg_score = self.cls_score(x_normalized[:, 0])
