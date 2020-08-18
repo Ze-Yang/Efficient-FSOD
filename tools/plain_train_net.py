@@ -351,6 +351,6 @@ if __name__ == "__main__":
         args.num_gpus,
         num_machines=args.num_machines,
         machine_rank=args.machine_rank,
-        dist_url=args.dist_url,
+        dist_url='auto',
         args=(args,),
     )
