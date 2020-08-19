@@ -671,21 +671,22 @@ class StandardROIHeads(ROIHeads):
         meta_weight_list = comm.all_gather_grad(local_meta_weight)
         gt_classes_list = comm.all_gather_grad(local_gt_classes)
         global_meta_weight = torch.cat(meta_weight_list, dim=0)
-        global_gt_classes = torch.cat(gt_classes_list, dim=0).tolist()
+        global_gt_classes = torch.cat(gt_classes_list, dim=0)
         meta_weight = [torch.empty(0, device='cuda') for _ in range(self.num_classes)]
 
         # ensure the variables on the same device
         assert all([x.device == global_meta_weight.device for x in meta_weight]), \
             f'Variable {global_meta_weight} and {meta_weight} should be on the same device.'
-        for i, gt_cls in enumerate(global_gt_classes):
+        for i, gt_cls in enumerate(global_gt_classes.tolist()):
             meta_weight[gt_cls] = torch.cat((meta_weight[gt_cls], global_meta_weight[i][None, :]), dim=0)
 
         meta_weight = [F.normalize(x, dim=1).mean(0) if torch.numel(x)
                       else torch.zeros(global_meta_weight.size(1), device='cuda') for x in meta_weight]
         meta_weight = torch.stack(meta_weight, dim=0)
         self.new_weight = self.box_predictor.cls_score.weight.clone()
-        self.new_weight[:-1] = self.momentum * self.new_weight[:-1] + \
-                               (1 - self.momentum) * meta_weight
+        gt_mask = global_gt_classes.unique()
+        mask_momentum = self.new_weight.new_full((self.num_classes, 1), self.momentum).index_fill_(0, gt_mask, 1)
+        self.new_weight[:-1] = mask_momentum * self.new_weight[:-1] + (1 - mask_momentum) * meta_weight
 
     def _forward_box(self, features, proposals):
         """
