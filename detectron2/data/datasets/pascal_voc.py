@@ -43,17 +43,24 @@ CLASS_NAMES = (CLASS_NAMES_origin, CLASS_NAMES_split1,
 # fmt: on
 
 
-def load_voc_instances(cfg, dirname: str, split: str):
+def load_voc_instances(cfg, name: str, dirname: str, split: str):
     """
     Load Pascal VOC detection annotations to Detectron2 format.
 
     Args:
+        cfg: global configs
+        name: name of the dataset
         dirname: Contain "Annotations", "ImageSets", "JPEGImages"
         split (str): one of "train", "test", "val", "trainval"
     """
+    # parse the class split information
+    index = name.find('split')
+    cls_split = int(name[index + len('split')])
+
+    # legacy data shots, which are constructed by sampling only one instance of interest per image.
     # if 'train' in split and cfg.PHASE == 2:
     #     fileids = []
-    #     for cls_name in CLASS_NAMES[cfg.SPLIT]:
+    #     for cls_name in CLASS_NAMES[cls_split]:
     #         with PathManager.open(os.path.join(dirname, "ImageSets", "Main", "1_box", cls_name + ".txt")) as f:
     #             fileids.extend(np.loadtxt(f, dtype=np.str)[:cfg.DATASETS.SHOT])
     # else:
@@ -80,7 +87,9 @@ def load_voc_instances(cfg, dirname: str, split: str):
             # We include "difficult" samples in training.
             # Based on limited experiments, they don't hurt accuracy.
             difficult = int(obj.find("difficult").text)
-            if difficult == 1 and 'train' in split:
+            if cfg.PHASE == 2 and difficult == 1 and 'train' in split:
+                continue
+            if cfg.PHASE == 1 and cls not in CLASS_NAMES[cls_split][:15]:
                 continue
             bbox = obj.find("bndbox")
             bbox = [float(bbox.find(x).text) for x in ["xmin", "ymin", "xmax", "ymax"]]
@@ -92,7 +101,7 @@ def load_voc_instances(cfg, dirname: str, split: str):
             bbox[1] -= 1.0
             instances.append(
                 {"category_id": -1 if cfg.INSTANCE_SHOT and i not in [0] and 'train' in split else
-                    CLASS_NAMES[cfg.SPLIT].index(cls), "bbox": bbox, "bbox_mode": BoxMode.XYXY_ABS}
+                    CLASS_NAMES[cls_split].index(cls), "bbox": bbox, "bbox_mode": BoxMode.XYXY_ABS}
             )
         r["annotations"] = instances
         dicts.append(r)
@@ -100,12 +109,16 @@ def load_voc_instances(cfg, dirname: str, split: str):
 
 
 def register_pascal_voc(name, dirname, split, year):
-    DatasetCatalog.register(name, lambda cfg=None: load_voc_instances(cfg, dirname, split))
+    DatasetCatalog.register(name, lambda cfg=None: load_voc_instances(cfg, name, dirname, split))
     if 'split' in name:
         index = name.find('split')
         cls_split = int(name[index + len('split')])
     else:
         cls_split = 0
+    if 'base' in name:
+        class_name = CLASS_NAMES[cls_split][:15]
+    else:
+        class_name = CLASS_NAMES[cls_split]
     MetadataCatalog.get(name).set(
-        thing_classes=CLASS_NAMES[cls_split], dirname=dirname, year=year, split=split
+        thing_classes=class_name, dirname=dirname, year=year, split=split
     )

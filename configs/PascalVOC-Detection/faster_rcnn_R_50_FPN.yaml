@@ -20,7 +20,6 @@ SOLVER:
   STEPS: (12000, 16000)
   MAX_ITER: 18000  # 17.4 epochs
   WARMUP_ITERS: 100
-SPLIT: 1
 PHASE: 1
 OUTPUT_DIR:
   ./results/VOC_split1_pretrain
