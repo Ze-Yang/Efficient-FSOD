@@ -28,7 +28,7 @@ import torch.nn.functional as F
 
 import detectron2.utils.comm as comm
 from detectron2.checkpoint import DetectionCheckpointer, PeriodicCheckpointer
-from detectron2.config import get_cfg
+from detectron2.config import get_cfg, set_global_cfg
 from detectron2.data import (
     MetadataCatalog,
     build_detection_test_loader,
@@ -346,6 +346,7 @@ def setup(args):
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
     cfg.freeze()
+    set_global_cfg(cfg)
     default_setup(
         cfg, args
     )  # if you don't like any of the default setup, write your own setup code

@@ -13,6 +13,7 @@ from fvcore.common.file_io import PathManager
 
 from detectron2.data import MetadataCatalog
 from detectron2.utils import comm
+from detectron2.config import global_cfg
 
 from .evaluator import DatasetEvaluator
 
@@ -124,7 +125,8 @@ class PascalVOCDetectionEvaluator(DatasetEvaluator):
         for ap in aps[50]:
             self._logger.info('{:.2f}'.format(ap))
         self._logger.info('Base Mean AP = {:.2f}'.format(np.mean(aps[50][:15])))
-        self._logger.info('Novel Mean AP = {:.2f}'.format(np.mean(aps[50][15:])))
+        if global_cfg.PHASE == 2:
+            self._logger.info('Novel Mean AP = {:.2f}'.format(np.mean(aps[50][15:])))
         self._logger.info('~~~~~~~~')
         self._logger.info('--------------------------------------------------------------')
         self._logger.info('Results computed with the **unofficial** Python eval code.')
