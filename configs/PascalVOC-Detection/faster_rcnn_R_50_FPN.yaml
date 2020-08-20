@@ -12,8 +12,8 @@ INPUT:
   MIN_SIZE_TRAIN: (480, 512, 544, 576, 608, 640, 672, 704, 736, 768, 800)
   MIN_SIZE_TEST: 800
 DATASETS:
-  TRAIN: ('voc_2007_trainval_split1', 'voc_2012_trainval_split1')
-  TEST: ('voc_2007_test_split1',)
+  TRAIN: ('voc_2007_trainval_split1_base', 'voc_2012_trainval_split1_base')
+  TEST: ('voc_2007_test_split1_base',)
 #  TRAIN: ('voc_2007_trainval', 'voc_2012_trainval')
 #  TEST: ('voc_2007_test',)
 SOLVER:

@@ -1,0 +1,38 @@
+_BASE_: "../Base-RCNN-FPN.yaml"
+MODEL:
+  WEIGHTS: "./results/VOC_split1_pretrain/model_final.pth"
+  MASK_ON: False
+  RESNETS:
+    DEPTH: 50
+#  BACKBONE:
+#    FREEZE: True
+  ROI_BOX_HEAD:
+    CLS_AGNOSTIC_BBOX_REG: True
+#    PREDICTOR: 'CosineSimOutputLayers'
+#    FREEZE: True
+  ROI_HEADS:
+    NUM_CLASSES: 20
+    NAME: 'ReweightedROIHeads'
+INPUT:
+  MIN_SIZE_TRAIN: (480, 512, 544, 576, 608, 640, 672, 704, 736, 768, 800)
+  MIN_SIZE_TEST: 800
+DATASETS:
+  TRAIN: ('voc_2007_trainval_split1_5shot', 'voc_2012_trainval_split1_5shot')
+  TEST: ('voc_2007_test_split1_all',)
+  SHOT: 5
+SOLVER:
+  STEPS: (60, 80)
+  WARMUP_ITERS: 5
+  MAX_ITER: 90
+  CHECKPOINT_PERIOD: 20
+SETTING: 'Incremental'
+SPLIT: 1
+PHASE: 2
+METHOD: 'ours'
+INIT_ITERS: 50
+OUTPUT_DIR:
+#  ./results/test
+  ./results/fewshot/VOC/FSRW/voc_split1_ours_5shot_4
+#INSTANCE_SHOT: True
+#TEST:
+#  EVAL_PERIOD: 100

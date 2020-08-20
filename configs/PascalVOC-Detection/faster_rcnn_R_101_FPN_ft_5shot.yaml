@@ -1,0 +1,54 @@
+_BASE_: "../Base-RCNN-FPN.yaml"
+MODEL:
+  WEIGHTS:
+#    "./results/VOC_split1_pretrain_R101_1/model_final.pth"
+    '../few-shot-object-detection/checkpoints/voc/faster_rcnn/faster_rcnn_R_101_FPN_base1_2/model_final.pth'
+  MASK_ON: False
+  RESNETS:
+    DEPTH: 101
+  BACKBONE:
+    FREEZE: True
+  ROI_BOX_HEAD:
+    CLS_AGNOSTIC_BBOX_REG: True
+#    PREDICTOR: 'CosineSimOutputLayers'
+    FREEZE: True
+  ROI_HEADS:
+    NUM_CLASSES: 20
+  PROPOSAL_GENERATOR:
+    FREEZE: True
+INPUT:
+  MIN_SIZE_TRAIN: (480, 512, 544, 576, 608, 640, 672, 704, 736, 768, 800)
+  MIN_SIZE_TEST: 800
+DATASETS:
+  TRAIN: ('voc_2007_trainval_split1_5shot', 'voc_2012_trainval_split1_5shot')
+  TEST: ('voc_2007_test_split1_all',)
+  SHOT: 5
+SOLVER:
+#  BASE_LR: 0.01
+#  STEPS: (1800,)
+#  WARMUP_ITERS: 10
+#  MAX_ITER: 2000
+##  STEPS: (1300, 1700)
+##  WARMUP_ITERS: 100
+##  MAX_ITER: 2000
+#  CHECKPOINT_PERIOD: 500
+  BASE_LR: 0.001
+  STEPS: (17500,)
+  MAX_ITER: 20000
+  CHECKPOINT_PERIOD: 5000
+  WARMUP_ITERS: 0
+#  BASE_LR: 0.005
+#  STEPS: (1300, 1700)
+#  MAX_ITER: 2000
+#  CHECKPOINT_PERIOD: 500
+#  WARMUP_ITERS: 500
+SETTING: 'Incremental'
+SPLIT: 1
+PHASE: 2
+METHOD: 'ft'
+INIT_ITERS: 50
+OUTPUT_DIR:
+  ./results/fewshot/VOC/FSRW/voc_split1_5shot_15
+#  ./results/test
+#TEST:
+#  EVAL_PERIOD: 100
