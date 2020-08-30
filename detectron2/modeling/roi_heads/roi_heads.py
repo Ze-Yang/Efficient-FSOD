@@ -615,7 +615,7 @@ class StandardROIHeads(ROIHeads):
 
     def _init_weight(self, features, targets):
         box_features = self.box_pooler(features, [x.gt_boxes for x in targets])
-        activations = self.box_head(box_features)
+        activations = self.meta_head(box_features) if self.meta_on else self.box_head(box_features)
         gt_classes = torch.cat([x.gt_classes for x in targets], dim=0)
         keep = gt_classes != -1
         activations = activations[keep]
@@ -661,10 +661,11 @@ class StandardROIHeads(ROIHeads):
             targets (list[Instances]): the per-image object ground truth.
                 Each has fields "gt_classes", "gt_boxes".
         """
-        meta_features = self.meta_pooler([x[:self.ims_per_gpu] for x in features],
-                                         [x.gt_boxes for x in targets[:self.ims_per_gpu]])
+        meta_features = self.meta_pooler([x[:self.ims_per_gpu if self.training else None] for x in features],
+                                         [x.gt_boxes for x in targets[:self.ims_per_gpu if self.training else None]])
         local_meta_weight = self.meta_head(meta_features)
-        local_gt_classes = torch.cat([x.gt_classes for x in targets[:self.ims_per_gpu]], dim=0)
+        local_gt_classes = torch.cat([x.gt_classes for x in
+                                      targets[:self.ims_per_gpu if self.training else None]], dim=0)
         keep = local_gt_classes != -1
         local_meta_weight = local_meta_weight[keep]
         local_gt_classes = local_gt_classes[keep]
@@ -683,10 +684,18 @@ class StandardROIHeads(ROIHeads):
         meta_weight = [F.normalize(x, dim=1).mean(0) if torch.numel(x)
                       else torch.zeros(global_meta_weight.size(1), device='cuda') for x in meta_weight]
         meta_weight = torch.stack(meta_weight, dim=0)
-        self.new_weight = self.box_predictor.cls_score.weight.clone()
+
+        # In each iteration, the meta branch only predicts a subset of class weights, therefore
+        # filtering out irrelevant class weights that should not be multiplied by momentum
         gt_mask = global_gt_classes.unique()
-        mask_momentum = self.new_weight.new_full((self.num_classes, 1), self.momentum).index_fill_(0, gt_mask, 1)
-        self.new_weight[:-1] = mask_momentum * self.new_weight[:-1] + (1 - mask_momentum) * meta_weight
+        momentum = meta_weight.new_ones((self.num_classes, 1)).index_fill_(0, gt_mask, self.momentum)
+        if self.training:
+            self.new_weight = self.box_predictor.cls_score.weight.clone()
+            self.new_weight[:-1] = momentum * self.new_weight[:-1] + (1. - momentum) * meta_weight
+            self.box_predictor.cls_score.weight.data = self.new_weight
+        else:
+            self.box_predictor.cls_score.weight.data[:-1] = momentum * self.box_predictor.cls_score.weight.data[:-1] + \
+                                                            (1. - momentum) * meta_weight
 
     def _forward_box(self, features, proposals):
         """
@@ -708,6 +717,8 @@ class StandardROIHeads(ROIHeads):
         pred_class_logits, pred_proposal_deltas = self.box_predictor(
             box_features, self.new_weight if hasattr(self, 'new_weight') else None)
         del box_features
+        if hasattr(self, 'new_weight'):
+            del self.new_weight
 
         outputs = FastRCNNOutputs(
             self.box2box_transform,
