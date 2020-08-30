@@ -60,6 +60,11 @@ class GeneralizedRCNN(nn.Module):
                 p.requires_grad = False
             logger.info('Freeze roi_box_head parameters')
 
+        if cfg.MODEL.ROI_META_HEAD.FREEZE:
+            for p in self.roi_heads.meta_head.parameters():
+                p.requires_grad = False
+            logger.info('Freeze roi_meta_head parameters')
+
         if cfg.MODEL.ROI_MASK_HEAD.FREEZE:
             for p in self.roi_heads.mask_head.parameters():
                 p.requires_grad = False

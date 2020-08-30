@@ -304,6 +304,8 @@ _C.MODEL.ROI_META_HEAD.STRIDE = [2]
 _C.MODEL.ROI_META_HEAD.NORM = ""
 # Momentum for updating the classifier weight
 _C.MODEL.ROI_META_HEAD.MOMENTUM = 0.99
+# Freeze ROI meta head
+_C.MODEL.ROI_META_HEAD.FREEZE = False
 
 
 # ---------------------------------------------------------------------------- #
