@@ -43,7 +43,6 @@ def load_coco_json(cfg, json_file, image_root, dataset_name=None, extra_annotati
             loaded into the dataset dict (besides "iscrowd", "bbox", "keypoints",
             "category_id", "segmentation"). The values for these keys will be returned as-is.
             For example, the densepose annotations are loaded in this way.
-        type (str): options [voc, nonvoc, voc_nonvoc, nonvoc_voc], decides the sequence of category_id.
 
     Returns:
         list[dict]: a list of dicts in Detectron2 standard format. (See
