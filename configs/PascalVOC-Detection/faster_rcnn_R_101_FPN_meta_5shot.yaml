@@ -1,0 +1,45 @@
+_BASE_: "../Base-RCNN-FPN.yaml"
+MODEL:
+  WEIGHTS: "./meta_results/VOC_split1_pretrain_R101_3/model_final.pth"
+  MASK_ON: False
+  META_ON: True
+  RESNETS:
+    DEPTH: 101
+  BACKBONE:
+    FREEZE: True
+  ROI_BOX_HEAD:
+    CLS_AGNOSTIC_BBOX_REG: True
+#    PREDICTOR: 'CosineSimOutputLayers'
+#    FREEZE: True
+  ROI_META_HEAD:
+    FREEZE: True
+  ROI_HEADS:
+#    SCORE_THRESH_TEST: 0.01
+    NUM_CLASSES: 20
+INPUT:
+  MIN_SIZE_TRAIN: (480, 512, 544, 576, 608, 640, 672, 704, 736, 768, 800)
+  MIN_SIZE_TEST: 800
+DATASETS:
+  TRAIN: ('voc_2007_trainval_split1_5shot', 'voc_2012_trainval_split1_5shot')
+  TEST: ('voc_2007_test_split1_all',)
+  SHOT: 5
+SOLVER:
+  IMS_PER_BATCH: 16
+  BASE_LR: 0.02
+  STEPS: (200, 250)
+  WARMUP_ITERS: 5
+  MAX_ITER: 300
+#  STEPS: (1300, 1700)
+#  WARMUP_ITERS: 100
+#  MAX_ITER: 2000
+  CHECKPOINT_PERIOD: 50
+SETTING: 'Incremental'
+PHASE: 2
+METHOD: 'meta'
+INIT_ITERS: 50
+OUTPUT_DIR:
+#  ./results/fewshot/VOC/FSRW/voc_split1_imprint_5shot_2
+#  ./meta_results/fewshot/VOC/voc_split1_meta_5shot_3
+  ./meta_results/test
+#TEST:
+#  EVAL_PERIOD: 100

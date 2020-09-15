@@ -1,0 +1,31 @@
+_BASE_: "../Base-RCNN-FPN.yaml"
+MODEL:
+  WEIGHTS: "./results/FSOD_train/model_final.pth"
+  RESNETS:
+    DEPTH: 101
+  BACKBONE:
+    FREEZE: True
+  ROI_HEADS:
+    NUM_CLASSES: 20
+  ROI_BOX_HEAD:
+    CLS_AGNOSTIC_BBOX_REG: True
+#    PREDICTOR: 'CosineSimOutputLayers'
+    FREEZE: True
+#  PROPOSAL_GENERATOR:
+#    FREEZE: True
+DATASETS:
+  TRAIN: ('coco_2017_train_voc_split',)
+  TEST: ('coco_2017_val_voc_split',)
+  SHOT: 10
+SOLVER:
+  BASE_LR: 0.01
+  STEPS: (10000,)
+  MAX_ITER: 4000
+  WARMUP_ITERS: 0
+  CHECKPOINT_PERIOD: 500
+SETTING: 'Transfer'
+PHASE: 2
+METHOD: 'ft'
+OUTPUT_DIR:
+#  ./results/fewshot/coco/fsod_10shot_6
+  ./results/test
