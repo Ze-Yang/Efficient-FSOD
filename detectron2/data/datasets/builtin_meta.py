@@ -193,28 +193,27 @@ def _get_coco_instances_meta(dataset_name=''):
     voc_inds = (0, 1, 2, 3, 4, 5, 6, 8, 14, 15, 16, 17, 18, 19, 39, 56, 57, 58, 60, 62)
     nonvoc_inds = tuple([i for i in range(80) if i not in voc_inds])
     if 'nonvoc' in dataset_name:
-        id_map = nonvoc_inds + voc_inds
+        id_map = nonvoc_inds
         thing_ids = [thing_ids[i] for i in id_map]
         thing_classes = [COCO_CATEGORIES[k]["name"] for k in id_map]
         thing_colors = [COCO_CATEGORIES[k]["color"] for k in id_map]
+        assert len(thing_ids) == 60, len(thing_ids)
     elif 'voc' in dataset_name:
-        id_map = voc_inds + nonvoc_inds
+        id_map = voc_inds
         thing_ids = [thing_ids[i] for i in id_map]
         thing_classes = [COCO_CATEGORIES[k]["name"] for k in id_map]
         thing_colors = [COCO_CATEGORIES[k]["color"] for k in id_map]
+        assert len(thing_ids) == 20, len(thing_ids)
     else:
-        id_map = range(len(thing_ids))
         thing_colors = [k["color"] for k in COCO_CATEGORIES if k["isthing"] == 1]
         thing_classes = [k["name"] for k in COCO_CATEGORIES if k["isthing"] == 1]
-    # thing_colors = [k["color"] for k in COCO_CATEGORIES if k["isthing"] == 1]
-    assert len(thing_ids) == 80, len(thing_ids)
+        assert len(thing_ids) == 80, len(thing_ids)
     # Mapping from the incontiguous COCO category id to an id in [0, 79]
     thing_dataset_id_to_contiguous_id = {k: i for i, k in enumerate(thing_ids)}
     ret = {
         "thing_dataset_id_to_contiguous_id": thing_dataset_id_to_contiguous_id,
         "thing_classes": thing_classes,
         "thing_colors": thing_colors,
-        "id_map": id_map
     }
     return ret
 
