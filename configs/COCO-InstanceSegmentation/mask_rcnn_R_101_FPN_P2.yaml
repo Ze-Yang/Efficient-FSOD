@@ -18,7 +18,7 @@ MODEL:
     CLS_AGNOSTIC_MASK: True
 
 DATASETS:
-#  TRAIN: ('coco_10shot',)
+#  TRAIN: ('coco_10shot_FSRW',)
   TRAIN: ('coco_2017_train_voc_split',)
   TEST: ('coco_2017_val_voc_split',)
 #  TEST: ('coco_2017_val',)
