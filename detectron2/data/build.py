@@ -18,7 +18,8 @@ from detectron2.utils.logger import log_first_n
 
 from . import samplers
 from .catalog import DatasetCatalog, MetadataCatalog
-from .common import AspectRatioGroupedDataset, DatasetFromList, MapDataset
+from .common import Class_AspectRatio_GroupedDataset, AspectRatioGroupedDataset,\
+    DatasetFromList, MapDataset
 from .dataset_mapper import DatasetMapper
 from .detection_utils import check_metadata_consistency
 
@@ -327,6 +328,11 @@ def build_detection_train_loader(cfg, mapper=None, get_dataset=False):
             worker_init_fn=worker_init_reset_seed,
         )  # yield individual mapped dict
         data_loader = AspectRatioGroupedDataset(data_loader, images_per_worker)
+        # data_loader = Class_AspectRatio_GroupedDataset(
+        #     data_loader,
+        #     cfg.MODEL.ROI_HEADS.NUM_CLASSES,
+        #     images_per_worker
+        # )
     else:
         batch_sampler = torch.utils.data.sampler.BatchSampler(
             sampler, images_per_worker, drop_last=True
@@ -389,6 +395,11 @@ def build_dataloader(cfg, dataset, dataset_dicts):
             worker_init_fn=worker_init_reset_seed,
         )  # yield individual mapped dict
         data_loader = AspectRatioGroupedDataset(data_loader, images_per_worker)
+        # data_loader = Class_AspectRatio_GroupedDataset(
+        #     data_loader,
+        #     cfg.MODEL.ROI_HEADS.NUM_CLASSES,
+        #     images_per_worker
+        # )
     else:
         batch_sampler = torch.utils.data.sampler.BatchSampler(
             sampler, images_per_worker, drop_last=True

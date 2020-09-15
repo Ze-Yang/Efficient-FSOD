@@ -6,7 +6,7 @@ import torch.utils.data as data
 
 from detectron2.utils.serialize import PicklableWrapper
 
-__all__ = ["MapDataset", "DatasetFromList", "AspectRatioGroupedDataset"]
+__all__ = ["MapDataset", "DatasetFromList", "AspectRatioGroupedDataset", "Class_AspectRatio_GroupedDataset"]
 
 
 class MapDataset(data.Dataset):
@@ -110,6 +110,46 @@ class AspectRatioGroupedDataset(data.IterableDataset):
             w, h = d["width"], d["height"]
             bucket_id = 0 if w > h else 1
             bucket = self._buckets[bucket_id]
+            bucket.append(d)
+            if len(bucket) == self.batch_size:
+                yield bucket[:]
+                del bucket[:]
+
+
+class Class_AspectRatio_GroupedDataset(data.IterableDataset):
+    """
+    Batch data that have similar aspect ratio together.
+    In this implementation, images whose aspect ratio < (or >) 1 will
+    be batched together.
+
+    It assumes the underlying dataset produces dicts with "width" and "height" keys.
+    It will then produce a list of original dicts with length = batch_size,
+    all with similar aspect ratios.
+    """
+
+    def __init__(self, dataset, num_classes, batch_size):
+        """
+        Args:
+            dataset: an iterable. Each element must be a dict with keys
+                "width" and "height", which will be used to batch data.
+            num_classes (int): number of classes
+            batch_size (int):
+        """
+        self.dataset = dataset
+        self.batch_size = batch_size
+        self._buckets = [[[] for _ in range(2)] for _ in range(num_classes)]
+        # Hard-coded two aspect ratio groups: w > h and w < h.
+        # Can add support for more aspect ratio groups, but doesn't seem useful
+
+    def __iter__(self):
+        for d in self.dataset:
+            cls_set = set(d["instances"].gt_classes.tolist())
+            cls_set.discard(-1)
+            cls_list = list(cls_set)
+            cls = random.choice(cls_list)
+            w, h = d["width"], d["height"]
+            bucket_id = 0 if w > h else 1
+            bucket = self._buckets[cls][bucket_id]
             bucket.append(d)
             if len(bucket) == self.batch_size:
                 yield bucket[:]
