@@ -21,6 +21,7 @@ import os
 
 from detectron2.data import MetadataCatalog, DatasetCatalog
 from .register_coco import register_coco_instances, register_coco_panoptic_separated
+from .fsod import register_fsod_instances, get_fsod_instances_meta
 from .lvis import register_lvis_instances, get_lvis_instances_meta
 from .cityscapes import load_cityscapes_instances, load_cityscapes_semantic
 from .pascal_voc import register_pascal_voc
@@ -142,6 +143,29 @@ def register_all_coco(root="datasets"):
             os.path.join(root, semantic_root),
             instances_json,
         )
+
+
+# ==== Predefined datasets and splits for FSOD ==========
+
+
+_PREDEFINED_SPLITS_FSOD = {
+    "fsod": {
+        "fsod_train": ("fsod/images", "fsod/annotations/fsod_train.json"),
+        "fsod_test": ("fsod/images", "fsod/annotations/fsod_test.json"),
+    }
+}
+
+
+def register_all_fsod(root="datasets"):
+    for dataset_name, splits_per_dataset in _PREDEFINED_SPLITS_FSOD.items():
+        for key, (image_root, json_file) in splits_per_dataset.items():
+            # Assume pre-defined datasets live in `./datasets`.
+            register_fsod_instances(
+                key,
+                get_fsod_instances_meta(dataset_name, key),
+                os.path.join(root, json_file) if "://" not in json_file else json_file,
+                os.path.join(root, image_root),
+            )
 
 
 # ==== Predefined datasets and splits for LVIS ==========
@@ -274,6 +298,7 @@ def register_all_pascal_voc(root="datasets"):
 
 # Register them all under "./datasets"
 register_all_coco()
+register_all_fsod()
 register_all_lvis()
 register_all_cityscapes()
 register_all_pascal_voc()
