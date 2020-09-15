@@ -86,7 +86,6 @@ Category ids in annotations are not in [1, #categories]! We'll apply a mapping f
 """
                 )
         id_map = meta.thing_dataset_id_to_contiguous_id
-        id_of_int = list(id_map.keys())[:60] if 'nonvoc' in dataset_name else list(id_map.keys())[:20]  # id of interest
 
     # sort indices for reproducible results
     img_ids = sorted(coco_api.imgs.keys())
@@ -166,7 +165,7 @@ Category ids in annotations are not in [1, #categories]! We'll apply a mapping f
     # random.shuffle(imgs_anns)
     # images = []
     # annotations = []
-    cls_num = {i: 0 for i in id_of_int}
+    cls_num = {i: 0 for i in id_map.keys()}
     for (img_dict, anno_dict_list) in imgs_anns:
         record = {}
         record["file_name"] = os.path.join(image_root, img_dict["file_name"])
@@ -191,14 +190,24 @@ Category ids in annotations are not in [1, #categories]! We'll apply a mapping f
             obj = {key: anno[key] for key in ann_keys if key in anno}
 
             cls_id = obj["category_id"]
-            if not find:
-                if cls_num[cls_id] < cfg.DATASETS.SHOT:
-                    find = True
-                    cls_num[cls_id] += 1
-                else:
-                    cls_id = -1
-            else:
-                cls_id = -1
+            if 'train' in dataset_name:
+                box_area = obj['bbox'][2] * obj['bbox'][3]
+                if cfg.PHASE == 1:
+                    # if box_area < 32 * 32:  # filter out objects with area less than 32 x 32
+                    #     cls_id = -1
+                    pass
+                elif cfg.PHASE == 2:
+                    if not find:
+                        # if uncomment this, need to change the next 'if' to 'elif'
+                        # if box_area < 64 * 64 or box_area > 224 * 224:
+                        #     cls_id = -1
+                        if cls_num[cls_id] < cfg.DATASETS.SHOT:
+                            find = True
+                            cls_num[cls_id] += 1
+                        else:
+                            cls_id = -1
+                    else:
+                        cls_id = -1
 
             segm = anno.get("segmentation", None)
             if segm:  # either list[list[float]] or dict(RLE)
@@ -223,11 +232,7 @@ Category ids in annotations are not in [1, #categories]! We'll apply a mapping f
 
             obj["bbox_mode"] = BoxMode.XYWH_ABS
             if id_map:
-                if 'train' in dataset_name and cfg.PHASE == 2:
-                    obj["category_id"] = id_map[cls_id] if cls_id != -1 else -1
-                    # anno["category_id"] = cls_id
-                else:
-                    obj["category_id"] = id_map[obj["category_id"]]
+                obj["category_id"] = id_map[cls_id] if cls_id != -1 else -1
             objs.append(obj)
         if 'train' in dataset_name and cfg.PHASE == 2:
             # if not all([obj["category_id"] == -1 for obj in objs]):
