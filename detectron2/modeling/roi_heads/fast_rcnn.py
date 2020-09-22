@@ -384,8 +384,9 @@ class FastRCNNOutputLayers(nn.Module):
             novel_proposal_deltas = self.bbox_pred(x[:, 1:]).reshape(x.shape[0], -1)
             proposal_deltas = torch.cat([base_proposal_deltas, novel_proposal_deltas], dim=1)
         else:
-            if new_weight is not None:
-                scores = x.mm(new_weight.t()) + self.cls_score.bias
+            if hasattr(self, 'new_weight'):
+                scores = x.mm(self.new_weight.t()) + self.cls_score.bias
+                del self.new_weight
             else:
                 scores = self.cls_score(x)
             # scores = self.cls_score(x).squeeze(-1) if self.reweight else self.cls_score(x)

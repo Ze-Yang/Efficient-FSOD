@@ -666,36 +666,57 @@ class StandardROIHeads(ROIHeads):
         local_meta_weight = self.meta_head(meta_features)
         local_gt_classes = torch.cat([x.gt_classes for x in
                                       targets[:self.ims_per_gpu if self.training else None]], dim=0)
-        keep = local_gt_classes != -1
-        local_meta_weight = local_meta_weight[keep]
-        local_gt_classes = local_gt_classes[keep]
-        meta_weight_list = comm.all_gather_grad(local_meta_weight)
-        gt_classes_list = comm.all_gather_grad(local_gt_classes)
-        global_meta_weight = torch.cat(meta_weight_list, dim=0)
-        global_gt_classes = torch.cat(gt_classes_list, dim=0)
-        meta_weight = [torch.empty(0, device='cuda') for _ in range(self.num_classes)]
-
-        # ensure the variables on the same device
-        assert all([x.device == global_meta_weight.device for x in meta_weight]), \
-            f'Variable {global_meta_weight} and {meta_weight} should be on the same device.'
-        for i, gt_cls in enumerate(global_gt_classes.tolist()):
-            meta_weight[gt_cls] = torch.cat((meta_weight[gt_cls], global_meta_weight[i][None, :]), dim=0)
-
-        meta_weight = [F.normalize(x, dim=1).mean(0) if torch.numel(x)
-                      else torch.zeros(global_meta_weight.size(1), device='cuda') for x in meta_weight]
-        meta_weight = torch.stack(meta_weight, dim=0)
+        meta_weight, global_gt_classes = self._gather(local_meta_weight, local_gt_classes)
 
         # In each iteration, the meta branch only predicts a subset of class weights, therefore
         # filtering out irrelevant class weights that should not be multiplied by momentum
         gt_mask = global_gt_classes.unique()
         momentum = meta_weight.new_ones((self.num_classes, 1)).index_fill_(0, gt_mask, self.momentum)
         if self.training:
-            self.new_weight = self.box_predictor.cls_score.weight.clone()
-            self.new_weight[:-1] = momentum * self.new_weight[:-1] + (1. - momentum) * meta_weight
-            self.box_predictor.cls_score.weight.data = self.new_weight
+            self.box_predictor.new_weight = self.box_predictor.cls_score.weight.clone()
+            self.box_predictor.new_weight[:-1] = momentum * self.box_predictor.new_weight[:-1] + (1. - momentum) * meta_weight
+            self.box_predictor.cls_score.weight.data = self.box_predictor.new_weight
         else:
             self.box_predictor.cls_score.weight.data[:-1] = momentum * self.box_predictor.cls_score.weight.data[:-1] + \
                                                             (1. - momentum) * meta_weight
+
+    def _gather(self, local_features, local_gt_classes):
+        """
+        This function performs two operations. 1) gather the "local_features" across
+        different GPUs to obtain the "global_features". The same is applied to the
+        "local_gt_classes" to yield "global_gt_classes". 2) aggregate the global features
+        into class-wise representations according to their class labels by norm-mean
+        (norm followed by mean).
+
+        Args:
+            local_features (Tensor): Instance features to be gathered, of shape (num, feature_dim).
+            local_gt_classes (Tensor): Corresponding class label for "local_features", of shape (num,).
+
+        Returns:
+            cls_feat (Tensor): class-wise features gathered and aggregated from local_features.
+            global_gt_classes (Tensor): class labels gathered from local_gt_class.
+        """
+        # filter out ignored classes
+        keep = local_gt_classes != -1
+        local_features = local_features[keep]
+        local_gt_classes = local_gt_classes[keep]
+
+        # gather features across different GPU devices
+        feat_list = comm.all_gather_grad(local_features)
+        gt_cls_list = comm.all_gather_grad(local_gt_classes)
+        global_features = torch.cat(feat_list, dim=0)
+        global_gt_classes = torch.cat(gt_cls_list, dim=0)
+
+        cls_list = [torch.empty(0, device='cuda') for _ in range(self.num_classes)]
+        # ensure the variables on the same device
+        assert all([x.device == global_features.device for x in cls_list]), \
+            'Variable global_features and cls_list should be on the same device.'
+        for i, gt_cls in enumerate(global_gt_classes.tolist()):
+            cls_list[gt_cls] = torch.cat((cls_list[gt_cls], global_features[i][None, :]), dim=0)
+        cls_list = [F.normalize(x, dim=1).mean(0) if torch.numel(x)
+                      else torch.zeros(global_features.size(1), device='cuda') for x in cls_list]
+        cls_feat = torch.stack(cls_list, dim=0)
+        return cls_feat, global_gt_classes
 
     def _forward_box(self, features, proposals):
         """
@@ -714,11 +735,8 @@ class StandardROIHeads(ROIHeads):
         """
         box_features = self.box_pooler(features, [x.proposal_boxes for x in proposals])
         box_features = self.box_head(box_features)
-        pred_class_logits, pred_proposal_deltas = self.box_predictor(
-            box_features, self.new_weight if hasattr(self, 'new_weight') else None)
+        pred_class_logits, pred_proposal_deltas = self.box_predictor(box_features)
         del box_features
-        if hasattr(self, 'new_weight'):
-            del self.new_weight
 
         outputs = FastRCNNOutputs(
             self.box2box_transform,
