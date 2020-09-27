@@ -3,19 +3,25 @@ output
 instant_test_output
 inference_test_output
 /results
-*.patch
+
+
 *.jpg
 *.png
 *.txt
+*.json
+*.diff
+*.patch
 
 # compilation and distribution
 __pycache__
 _ext
 *.pyc
+*.pyd
 *.so
 detectron2.egg-info/
 build/
 dist/
+wheels/
 
 # pytorch/python/numpy formats
 *.pth
@@ -32,10 +38,13 @@ dist/
 *.swp
 *~
 
-# Pycharm editor settings
+# editor settings
 .idea
+.vscode
 
 # project dirs
 /detectron2/model_zoo/configs
-/datasets
+/datasets/*
+!/datasets/*.*
+/projects/*/datasets
 /models
