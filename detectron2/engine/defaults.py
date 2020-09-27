@@ -260,7 +260,6 @@ class DefaultTrainer(SimpleTrainer):
             # Assume you want to save checkpoints together with logs/statistics
             model,
             cfg.OUTPUT_DIR,
-            cfg.PHASE,
             optimizer=optimizer,
             scheduler=self.scheduler,
         )

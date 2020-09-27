@@ -5,7 +5,7 @@ from fvcore.common.file_io import PathManager
 import os
 import numpy as np
 import xml.etree.ElementTree as ET
-
+from detectron2.config import global_cfg as cfg
 from detectron2.structures import BoxMode
 from detectron2.data import DatasetCatalog, MetadataCatalog
 
@@ -43,12 +43,11 @@ CLASS_NAMES = (CLASS_NAMES_origin, CLASS_NAMES_split1,
 # fmt: on
 
 
-def load_voc_instances(cfg, name: str, dirname: str, split: str):
+def load_voc_instances(name: str, dirname: str, split: str):
     """
     Load Pascal VOC detection annotations to Detectron2 format.
 
     Args:
-        cfg: global configs
         name: name of the dataset
         dirname: Contain "Annotations", "ImageSets", "JPEGImages"
         split (str): one of "train", "test", "val", "trainval"
@@ -109,7 +108,7 @@ def load_voc_instances(cfg, name: str, dirname: str, split: str):
 
 
 def register_pascal_voc(name, dirname, split, year):
-    DatasetCatalog.register(name, lambda cfg=None: load_voc_instances(cfg, name, dirname, split))
+    DatasetCatalog.register(name, lambda: load_voc_instances(name, dirname, split))
     if 'split' in name:
         index = name.find('split')
         cls_split = int(name[index + len('split')])

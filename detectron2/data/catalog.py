@@ -59,7 +59,7 @@ class DatasetCatalog(object):
                     name, ", ".join(DatasetCatalog._REGISTERED.keys())
                 )
             )
-        return f
+        return f()
 
     @staticmethod
     def list() -> List[str]:

@@ -13,7 +13,7 @@ from PIL import Image
 from fvcore.common.timer import Timer
 from detectron2.structures import BoxMode, PolygonMasks, Boxes
 from fvcore.common.file_io import PathManager, file_lock
-
+from detectron2.config import global_cfg as cfg
 
 from .. import MetadataCatalog, DatasetCatalog
 
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 __all__ = ["load_coco_json", "load_sem_seg"]
 
 
-def load_coco_json(cfg, json_file, image_root, dataset_name=None, extra_annotation_keys=None):
+def load_coco_json(json_file, image_root, dataset_name=None, extra_annotation_keys=None):
     """
     Load a json file with COCO's instances annotation format.
     Currently supports instance detection, instance segmentation,

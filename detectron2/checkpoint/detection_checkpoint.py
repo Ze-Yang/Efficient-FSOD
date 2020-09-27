@@ -4,6 +4,7 @@ from fvcore.common.checkpoint import Checkpointer
 from fvcore.common.file_io import PathManager
 import logging
 import detectron2.utils.comm as comm
+from detectron2.config import global_cfg as cfg
 import os
 from .c2_model_loading import align_and_update_state_dicts
 from typing import List, Optional
@@ -15,7 +16,7 @@ class DetectionCheckpointer(Checkpointer):
     model zoo, and apply conversions for legacy models.
     """
 
-    def __init__(self, model, save_dir="", cfg=None, *, save_to_disk=None, **checkpointables):
+    def __init__(self, model, save_dir="", *, save_to_disk=None, **checkpointables):
         is_main_process = comm.is_main_process()
         super().__init__(
             model,
@@ -23,8 +24,6 @@ class DetectionCheckpointer(Checkpointer):
             save_to_disk=is_main_process if save_to_disk is None else save_to_disk,
             **checkpointables,
         )
-        self.phase = cfg.PHASE if cfg is not None else None
-        self.cfg = cfg
 
     def _load_file(self, filename):
         if filename.endswith(".pkl"):
@@ -58,8 +57,8 @@ class DetectionCheckpointer(Checkpointer):
                 c2_conversion=checkpoint.get("__author__", None) == "Caffe2",
             )
             checkpoint["model"] = model_state_dict
-        # if self.cfg is not None and self.cfg.SETTING == 'Incremental' and \
-        #         self.cfg.MODEL.ROI_HEADS.NAME == 'ReweightedROIHeads':
+        # if cfg.SETTING == 'Incremental' and \
+        #         cfg.MODEL.ROI_HEADS.NAME == 'ReweightedROIHeads':
         #     logger = logging.getLogger(__name__)
         #     logger.info("Initializing box_head for novel classes.")
         #     dict = {}
@@ -103,7 +102,7 @@ class DetectionCheckpointer(Checkpointer):
         ):  # handle some existing subclasses that returns None
             self._log_incompatible_keys(incompatible)
 
-        if self.phase == 2:
+        if cfg.PHASE == 2:
             checkpoint.pop('iteration')
         for key in self.checkpointables if checkpointables is None else checkpointables:
             if key in checkpoint:  # pyre-ignore

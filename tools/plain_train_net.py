@@ -129,7 +129,7 @@ def do_train(cfg, model, resume=False):
     scheduler = build_lr_scheduler(cfg, optimizer)
 
     checkpointer = DetectionCheckpointer(
-        model, cfg.OUTPUT_DIR, cfg, optimizer=optimizer, scheduler=scheduler
+        model, cfg.OUTPUT_DIR, optimizer=optimizer, scheduler=scheduler
     )
     start_iter = (
         checkpointer.resume_or_load(cfg.MODEL.WEIGHTS, resume=resume).get("iteration", -1) + 1
