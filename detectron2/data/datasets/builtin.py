@@ -173,12 +173,34 @@ def register_all_fsod(root="datasets"):
 
 
 _PREDEFINED_SPLITS_LVIS = {
+    "lvis_v1": {
+        "lvis_v1_train": ("coco/", "lvis/lvis_v1_train.json"),
+        "lvis_v1_train_base": ("coco/", "lvis/lvis_v1_train_base.json"),
+        "lvis_v1_train_novel": ("coco/", "lvis/lvis_v1_train_novel.json"),
+        "lvis_v1_val": ("coco/", "lvis/lvis_v1_val.json"),
+        "lvis_v1_val_base": ("coco/", "lvis/lvis_v1_val_base.json"),
+        "lvis_v1_val_novel": ("coco/", "lvis/lvis_v1_val_novel.json"),
+        "lvis_v1_val_all": ("coco/", "lvis/lvis_v1_val.json"),
+        "lvis_v1_test_dev": ("coco/", "lvis/lvis_v1_image_info_test_dev.json"),
+        "lvis_v1_test_challenge": ("coco/", "lvis/lvis_v1_image_info_test_challenge.json"),
+    },
     "lvis_v0.5": {
-        "lvis_v0.5_train": ("coco/train2017", "lvis/lvis_v0.5_train.json"),
-        "lvis_v0.5_val": ("coco/val2017", "lvis/lvis_v0.5_val.json"),
-        "lvis_v0.5_val_rand_100": ("coco/val2017", "lvis/lvis_v0.5_val_rand_100.json"),
-        "lvis_v0.5_test": ("coco/test2017", "lvis/lvis_v0.5_image_info_test.json"),
-    }
+        "lvis_v0.5_train": ("coco/", "lvis/lvis_v0.5_train.json"),
+        "lvis_v0.5_train_base": ("coco/", "lvis/lvis_v0.5_train_base.json"),
+        "lvis_v0.5_train_novel": ("coco/", "lvis/lvis_v0.5_train_novel.json"),
+        "lvis_v0.5_val": ("coco/", "lvis/lvis_v0.5_val.json"),
+        "lvis_v0.5_val_base": ("coco/", "lvis/lvis_v0.5_val_base.json"),
+        "lvis_v0.5_val_novel": ("coco/", "lvis/lvis_v0.5_val_novel.json"),
+        "lvis_v0.5_val_all": ("coco/", "lvis/lvis_v0.5_val.json"),
+        "lvis_v0.5_val_rand_100": ("coco/", "lvis/lvis_v0.5_val_rand_100.json"),
+        "lvis_v0.5_test": ("coco/", "lvis/lvis_v0.5_image_info_test.json"),
+        # few-shot sets
+        "lvis_v0.5_train_10shot": ("coco/", "lvissplit/lvis_10shot.json"),
+    },
+    "lvis_v0.5_cocofied": {
+        "lvis_v0.5_train_cocofied": ("coco/", "lvis/lvis_v0.5_train_cocofied.json"),
+        "lvis_v0.5_val_cocofied": ("coco/", "lvis/lvis_v0.5_val_cocofied.json"),
+    },
 }
 
 

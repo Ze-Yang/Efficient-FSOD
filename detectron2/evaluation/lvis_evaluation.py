@@ -55,6 +55,14 @@ class LVISEvaluator(DatasetEvaluator):
         self._predictions = []
         self._lvis_results = []
 
+    def load(self):
+        if self._output_dir:
+            file_path = os.path.join(self._output_dir, "instances_predictions.pth")
+            with PathManager.open(file_path, "rb") as f:
+                self._predictions = torch.load(f)
+        else:
+            assert False, 'Please indicate output_dir for retest.'
+
     def _tasks_from_config(self, cfg):
         """
         Returns:
