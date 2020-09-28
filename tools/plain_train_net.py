@@ -33,7 +33,6 @@ from detectron2.data import (
     MetadataCatalog,
     build_detection_test_loader,
     build_detection_train_loader,
-    build_dataloader
 )
 from detectron2.engine import default_argument_parser, default_setup, launch
 from detectron2.evaluation import (
@@ -152,14 +151,14 @@ def do_train(cfg, model, resume=False):
 
     # compared to "train_net.py", we do not support accurate timing and
     # precise BN here, because they are not trivial to implement
-    dataset, dataset_dicts = build_detection_train_loader(cfg, get_dataset=True)
+    data_loader = build_detection_train_loader(cfg)
 
     if cfg.PHASE == 2:
-        init_weight(cfg, model, build_dataloader(cfg, dataset, dataset_dicts), checkpointer)
+        init_weight(cfg, model, data_loader, checkpointer)
+        data_loader._buckets = [[] for _ in range(2)]
 
     assert model.training, 'Model.train() must be True during training.'
     logger.info("Starting training from iteration {}".format(start_iter))
-    data_loader = build_dataloader(cfg, dataset, dataset_dicts)
     with EventStorage(start_iter) as storage:
         for data, iteration in zip(data_loader, range(start_iter, max_iter)):
             iteration = iteration + 1

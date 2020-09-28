@@ -30,7 +30,6 @@ This file contains the default logic to build a dataloader for training or testi
 __all__ = [
     "build_detection_train_loader",
     "build_detection_test_loader",
-    "build_dataloader",
     "get_detection_dataset_dicts",
     "load_proposals_into_dataset",
     "print_instances_class_histogram",
@@ -254,7 +253,7 @@ def get_detection_dataset_dicts(
     return dataset_dicts
 
 
-def build_detection_train_loader(cfg, mapper=None, get_dataset=False):
+def build_detection_train_loader(cfg, mapper=None):
     """
     A data loader is created by the following steps:
 
@@ -269,7 +268,6 @@ def build_detection_train_loader(cfg, mapper=None, get_dataset=False):
         mapper (callable): a callable which takes a sample (dict) from dataset and
             returns the format to be consumed by the model.
             By default it will be `DatasetMapper(cfg, True)`.
-        get_dataset (bool): If true, return dataset and dataset_dicts instead of dataloader.
 
     Returns:
         an infinite iterator of training data
@@ -301,76 +299,6 @@ def build_detection_train_loader(cfg, mapper=None, get_dataset=False):
     if mapper is None:
         mapper = DatasetMapper(cfg, True)
     dataset = MapDataset(dataset, mapper)
-
-    if get_dataset:
-        return dataset, dataset_dicts
-
-    sampler_name = cfg.DATALOADER.SAMPLER_TRAIN
-    logger = logging.getLogger(__name__)
-    logger.info("Using training sampler {}".format(sampler_name))
-    if sampler_name == "TrainingSampler":
-        sampler = samplers.TrainingSampler(len(dataset))
-    elif sampler_name == "RepeatFactorTrainingSampler":
-        sampler = samplers.RepeatFactorTrainingSampler(
-            dataset_dicts, cfg.DATALOADER.REPEAT_THRESHOLD
-        )
-    else:
-        raise ValueError("Unknown training sampler: {}".format(sampler_name))
-
-    if cfg.DATALOADER.ASPECT_RATIO_GROUPING:
-        data_loader = torch.utils.data.DataLoader(
-            dataset,
-            sampler=sampler,
-            num_workers=cfg.DATALOADER.NUM_WORKERS,
-            batch_sampler=None,
-            collate_fn=operator.itemgetter(0),  # don't batch, but yield individual elements
-            worker_init_fn=worker_init_reset_seed,
-        )  # yield individual mapped dict
-        data_loader = AspectRatioGroupedDataset(data_loader, images_per_worker)
-        # data_loader = Class_AspectRatio_GroupedDataset(
-        #     data_loader,
-        #     cfg.MODEL.ROI_HEADS.NUM_CLASSES,
-        #     images_per_worker
-        # )
-    else:
-        batch_sampler = torch.utils.data.sampler.BatchSampler(
-            sampler, images_per_worker, drop_last=True
-        )
-        # drop_last so the batch always have the same size
-        data_loader = torch.utils.data.DataLoader(
-            dataset,
-            num_workers=cfg.DATALOADER.NUM_WORKERS,
-            batch_sampler=batch_sampler,
-            collate_fn=trivial_batch_collator,
-            worker_init_fn=worker_init_reset_seed,
-        )
-
-    return data_loader
-
-
-def build_dataloader(cfg, dataset, dataset_dicts):
-    """
-    Args:
-        cfg (CfgNode): the config
-        dataset (Dateset): dataset after DatasetMapper.
-        dataset_dicts (list): dataset before DatasetMapper.
-
-    Returns:
-        an infinite iterator of training data
-    """
-    num_workers = get_world_size()
-    images_per_batch = cfg.SOLVER.IMS_PER_BATCH
-    assert (
-            images_per_batch % num_workers == 0
-    ), "SOLVER.IMS_PER_BATCH ({}) must be divisible by the number of workers ({}).".format(
-        images_per_batch, num_workers
-    )
-    assert (
-            images_per_batch >= num_workers
-    ), "SOLVER.IMS_PER_BATCH ({}) must be larger than the number of workers ({}).".format(
-        images_per_batch, num_workers
-    )
-    images_per_worker = images_per_batch // num_workers
 
     sampler_name = cfg.DATALOADER.SAMPLER_TRAIN
     logger = logging.getLogger(__name__)
