@@ -21,8 +21,9 @@ from collections import OrderedDict
 import torch
 
 import detectron2.utils.comm as comm
+from detectron2.utils.initializer import init_weight
 from detectron2.checkpoint import DetectionCheckpointer
-from detectron2.config import get_cfg
+from detectron2.config import get_cfg, set_global_cfg
 from detectron2.data import MetadataCatalog
 from detectron2.engine import DefaultTrainer, default_argument_parser, default_setup, hooks, launch
 from detectron2.evaluation import (
@@ -46,6 +47,18 @@ class Trainer(DefaultTrainer):
     "SimpleTrainer", or write your own training loop. You can use
     "tools/plain_train_net.py" as an example.
     """
+
+    def train(self):
+        """
+        Run training.
+
+        Returns:
+            OrderedDict of results, if evaluation is enabled. Otherwise None.
+        """
+        if self.cfg.PHASE == 2:
+            init_weight(self.cfg, self.model, self.data_loader, self.checkpointer)
+            self.data_loader._buckets = [[] for _ in range(2)]
+        return super().train()
 
     @classmethod
     def build_evaluator(cls, cfg, dataset_name, output_folder=None):
@@ -79,7 +92,7 @@ class Trainer(DefaultTrainer):
             ), "CityscapesEvaluator currently do not work with multiple machines."
             return CityscapesEvaluator(dataset_name)
         elif evaluator_type == "pascal_voc":
-            return PascalVOCDetectionEvaluator(dataset_name)
+            return PascalVOCDetectionEvaluator(dataset_name, output_folder)
         elif evaluator_type == "lvis":
             return LVISEvaluator(dataset_name, cfg, True, output_folder)
         if len(evaluator_list) == 0:
@@ -118,6 +131,7 @@ def setup(args):
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
     cfg.freeze()
+    set_global_cfg(cfg)
     default_setup(cfg, args)
     return cfg
 
@@ -130,7 +144,7 @@ def main(args):
         DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
             cfg.MODEL.WEIGHTS, resume=args.resume
         )
-        res = Trainer.test(cfg, model)
+        res = Trainer.test(cfg, model, args.retest)
         if comm.is_main_process():
             verify_results(cfg, res)
         if cfg.TEST.AUG.ENABLED:
@@ -158,6 +172,6 @@ if __name__ == "__main__":
         args.num_gpus,
         num_machines=args.num_machines,
         machine_rank=args.machine_rank,
-        dist_url=args.dist_url,
+        dist_url='auto',
         args=(args,),
     )

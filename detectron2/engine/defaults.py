@@ -280,7 +280,6 @@ class DefaultTrainer(SimpleTrainer):
         """
         # The checkpoint stores the training iteration that just finished, thus we start
         # at the next iteration (or iter zero if there's no checkpoint).
-        ### TODO
         self.start_iter = (
             self.checkpointer.resume_or_load(self.cfg.MODEL.WEIGHTS, resume=resume).get("iteration", -1) + 1
         )
@@ -430,7 +429,7 @@ class DefaultTrainer(SimpleTrainer):
         return build_detection_test_loader(cfg, dataset_name)
 
     @classmethod
-    def build_evaluator(cls, cfg, dataset_name):
+    def build_evaluator(cls, cfg, dataset_name, output_folder=None):
         """
         Returns:
             DatasetEvaluator
@@ -443,11 +442,12 @@ class DefaultTrainer(SimpleTrainer):
         )
 
     @classmethod
-    def test(cls, cfg, model, evaluators=None):
+    def test(cls, cfg, model, retest=False, evaluators=None):
         """
         Args:
             cfg (CfgNode):
             model (nn.Module):
+            retest (bool): if True, load results from .pth file for evaluation
             evaluators (list[DatasetEvaluator] or None): if None, will call
                 :meth:`build_evaluator`. Otherwise, must have the same length as
                 `cfg.DATASETS.TEST`.
@@ -472,7 +472,9 @@ class DefaultTrainer(SimpleTrainer):
                 evaluator = evaluators[idx]
             else:
                 try:
-                    evaluator = cls.build_evaluator(cfg, dataset_name)
+                    evaluator = cls.build_evaluator(
+                        cfg, dataset_name, os.path.join(cfg.OUTPUT_DIR, "inference", dataset_name)
+                    )
                 except NotImplementedError:
                     logger.warn(
                         "No evaluator found. Use `DefaultTrainer.test(evaluators=)`, "
@@ -480,7 +482,11 @@ class DefaultTrainer(SimpleTrainer):
                     )
                     results[dataset_name] = {}
                     continue
-            results_i = inference_on_dataset(model, data_loader, evaluator)
+            if retest:
+                evaluator.load()
+                results_i = evaluator.evaluate()
+            else:
+                results_i = inference_on_dataset(model, data_loader, evaluator)
             results[dataset_name] = results_i
             if comm.is_main_process():
                 assert isinstance(
