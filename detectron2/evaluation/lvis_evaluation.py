@@ -128,8 +128,22 @@ class LVISEvaluator(DatasetEvaluator):
         self._lvis_results = list(itertools.chain(*[x["instances"] for x in self._predictions]))
 
         # unmap the category ids for LVIS (from 0-indexed to 1-indexed)
-        for result in self._lvis_results:
-            result["category_id"] += 1
+        if hasattr(self._metadata, "thing_dataset_id_to_contiguous_id"):
+            # using reverse mapping
+            reverse_id_mapping = {
+                v: k for k, v in self._metadata.thing_dataset_id_to_contiguous_id.items()
+            }
+            for result in self._lvis_results:
+                category_id = result["category_id"]
+                assert (
+                        category_id in reverse_id_mapping
+                ), "A prediction has category_id={}, which is not available in the dataset.".format(
+                    category_id
+                )
+                result["category_id"] = reverse_id_mapping[category_id]
+        else:
+            for result in self._lvis_results:
+                result["category_id"] += 1
 
         if self._output_dir:
             file_path = os.path.join(self._output_dir, "lvis_instances_results.json")

@@ -62,8 +62,17 @@ def load_lvis_json(json_file, image_root, dataset_name=None):
         logger.info("Loading {} takes {:.2f} seconds.".format(json_file, timer.seconds()))
 
     if dataset_name is not None:
-        meta = get_lvis_instances_meta(dataset_name)
-        MetadataCatalog.get(dataset_name).set(**meta)
+        meta = MetadataCatalog.get(dataset_name)
+        cat_ids = lvis_api.get_cat_ids()
+        if 'all' in dataset_name:
+            id_base = [cat['id'] for cat in lvis_api.dataset['categories'] if cat['frequency'] in ('f', 'c')]
+            id_novel = [cat['id'] for cat in lvis_api.dataset['categories'] if cat['frequency'] == 'r']
+            cat_ids = id_base + id_novel
+        cats = lvis_api.load_cats(cat_ids)
+        thing_classes = list(map(lambda x: x["synonyms"][0], cats))
+        id_map = {k: i for i, k in enumerate(cat_ids)}
+        meta.set(**{'thing_classes': thing_classes,
+                    'thing_dataset_id_to_contiguous_id': id_map})
 
     # sort indices for reproducible results
     img_ids = sorted(lvis_api.imgs.keys())
@@ -127,7 +136,12 @@ def load_lvis_json(json_file, image_root, dataset_name=None):
             # This fails only when the data parsing logic or the annotation file is buggy.
             assert anno["image_id"] == image_id
             obj = {"bbox": anno["bbox"], "bbox_mode": BoxMode.XYWH_ABS}
-            obj["category_id"] = anno["category_id"] - 1  # Convert 1-indexed to 0-indexed
+            try:
+                # If variable 'id_map' is defined, apply id mapping through dictionary lookup
+                id_map
+                obj["category_id"] = id_map[anno["category_id"]]
+            except NameError:
+                obj["category_id"] = anno["category_id"] - 1  # Convert 1-indexed to 0-indexed
             segm = anno["segmentation"]  # list[list[float]]
             # filter out invalid polygons (< 3 points)
             valid_segm = [poly for poly in segm if len(poly) % 2 == 0 and len(poly) >= 6]
