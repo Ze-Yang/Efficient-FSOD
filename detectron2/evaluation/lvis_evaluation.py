@@ -16,6 +16,7 @@ from detectron2.utils.logger import create_small_table
 
 from .coco_evaluation import instances_to_coco_json
 from .evaluator import DatasetEvaluator
+from lvis import LVISEval, LVISResults
 
 
 class LVISEvaluator(DatasetEvaluator):
@@ -208,6 +209,82 @@ class LVISEvaluator(DatasetEvaluator):
         self._results["box_proposals"] = res
 
 
+class LVISEvalFewShot(LVISEval):
+    def __init__(self, lvis_gt, lvis_dt, iou_type="segm"):
+        super().__init__(lvis_gt, lvis_dt, iou_type)
+
+    def _prepare_freq_group(self):
+        freq_groups = [[] for _ in self.params.img_count_lbl]
+        cat_data = self.lvis_gt.load_cats(self.params.cat_ids)
+        for idx, _cat_data in enumerate(cat_data):
+            frequency = _cat_data["frequency"]
+            freq_groups[self.params.img_count_lbl.index(frequency)].append(idx)
+        base = freq_groups[self.params.img_count_lbl.index('f')] + \
+               freq_groups[self.params.img_count_lbl.index('c')]
+        novel = freq_groups[self.params.img_count_lbl.index('r')]
+        freq_groups.append(base)
+        freq_groups.append(novel)
+        return freq_groups
+
+    def summarize(self):
+        """Compute and display summary metrics for evaluation results."""
+        if not self.eval:
+            raise RuntimeError("Please run accumulate() first.")
+
+        max_dets = self.params.max_dets
+
+        self.results["AP"]   = self._summarize('ap')
+        self.results["AP50"] = self._summarize('ap', iou_thr=0.50)
+        self.results["AP75"] = self._summarize('ap', iou_thr=0.75)
+        self.results["APs"]  = self._summarize('ap', area_rng="small")
+        self.results["APm"]  = self._summarize('ap', area_rng="medium")
+        self.results["APl"]  = self._summarize('ap', area_rng="large")
+        self.results["APr"]  = self._summarize('ap', freq_group_idx=0)
+        self.results["APc"]  = self._summarize('ap', freq_group_idx=1)
+        self.results["APf"]  = self._summarize('ap', freq_group_idx=2)
+        self.results["APb"]  = self._summarize('ap', freq_group_idx=3)
+        self.results["APn"] = self._summarize('ap', freq_group_idx=4)
+
+        key = "AR@{}".format(max_dets)
+        self.results[key] = self._summarize('ar')
+
+        for area_rng in ["small", "medium", "large"]:
+            key = "AR{}@{}".format(area_rng[0], max_dets)
+            self.results[key] = self._summarize('ar', area_rng=area_rng)
+
+    def print_results(self):
+        template = " {:<18} {} @[ IoU={:<9} | area={:>6s} | maxDets={:>3d} catIds={:>3s}] = {:0.3f}"
+
+        for key, value in self.results.items():
+            max_dets = self.params.max_dets
+            if "AP" in key:
+                title = "Average Precision"
+                _type = "(AP)"
+            else:
+                title = "Average Recall"
+                _type = "(AR)"
+
+            if len(key) > 2 and key[2].isdigit():
+                iou_thr = (float(key[2:]) / 100)
+                iou = "{:0.2f}".format(iou_thr)
+            else:
+                iou = "{:0.2f}:{:0.2f}".format(
+                    self.params.iou_thrs[0], self.params.iou_thrs[-1]
+                )
+
+            if len(key) > 2 and key[2] in ["r", "c", "f", "b", "n"]:
+                cat_group_name = key[2]
+            else:
+                cat_group_name = "all"
+
+            if len(key) > 2 and key[2] in ["s", "m", "l"]:
+                area_rng = key[2]
+            else:
+                area_rng = "all"
+
+            print(template.format(title, _type, iou, area_rng, max_dets, cat_group_name, value))
+
+
 # inspired from Detectron:
 # https://github.com/facebookresearch/Detectron/blob/a6a835f5b8208c45d0dce217ce9bbda915f44df7/detectron/datasets/json_dataset_evaluator.py#L255 # noqa
 def _evaluate_box_proposals(dataset_predictions, lvis_api, thresholds=None, area="all", limit=None):
@@ -329,8 +406,8 @@ def _evaluate_predictions_on_lvis(lvis_gt, lvis_results, iou_type, class_names=N
         a dict of {metric name: score}
     """
     metrics = {
-        "bbox": ["AP", "AP50", "AP75", "APs", "APm", "APl", "APr", "APc", "APf"],
-        "segm": ["AP", "AP50", "AP75", "APs", "APm", "APl", "APr", "APc", "APf"],
+        "bbox": ["AP", "AP50", "AP75", "APs", "APm", "APl", "APr", "APc", "APf", "APb", "APn"],
+        "segm": ["AP", "AP50", "AP75", "APs", "APm", "APl", "APr", "APc", "APf", "APb", "APn"],
     }[iou_type]
 
     logger = logging.getLogger(__name__)
@@ -348,10 +425,8 @@ def _evaluate_predictions_on_lvis(lvis_gt, lvis_results, iou_type, class_names=N
         for c in lvis_results:
             c.pop("bbox", None)
 
-    from lvis import LVISEval, LVISResults
-
     lvis_results = LVISResults(lvis_gt, lvis_results)
-    lvis_eval = LVISEval(lvis_gt, lvis_results, iou_type)
+    lvis_eval = LVISEvalFewShot(lvis_gt, lvis_results, iou_type)
     lvis_eval.run()
     lvis_eval.print_results()
 
