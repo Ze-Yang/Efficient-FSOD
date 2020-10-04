@@ -103,7 +103,11 @@ class DetectionCheckpointer(Checkpointer):
             self._log_incompatible_keys(incompatible)
 
         if cfg.PHASE == 2:
-            checkpoint.pop('iteration')
+            try:
+                checkpoint.pop('iteration')
+            except KeyError:
+                logger = logging.getLogger(__name__)
+                logger.warning("No key 'iteration' found in the loaded model.")
         for key in self.checkpointables if checkpointables is None else checkpointables:
             if key in checkpoint:  # pyre-ignore
                 self.logger.info("Loading {} from {}".format(key, path))
