@@ -257,6 +257,16 @@ class ProposalNetwork(nn.Module):
         self.normalizer = lambda x: (x - pixel_mean) / pixel_std
         self.to(self.device)
 
+        if cfg.MODEL.BACKBONE.FREEZE:
+            for p in self.backbone.parameters():
+                p.requires_grad = False
+            logger.info('Freeze backbone parameters')
+
+        if cfg.MODEL.PROPOSAL_GENERATOR.FREEZE:
+            for p in self.proposal_generator.parameters():
+                p.requires_grad = False
+            logger.info('Freeze proposal generator parameters')
+
     def forward(self, batched_inputs):
         """
         Args:
