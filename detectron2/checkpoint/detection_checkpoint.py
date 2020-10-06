@@ -102,7 +102,9 @@ class DetectionCheckpointer(Checkpointer):
         ):  # handle some existing subclasses that returns None
             self._log_incompatible_keys(incompatible)
 
-        if cfg.PHASE == 2:
+        # do not load 'iteration' unless args.resume is True
+        # checkpointables is not None implies that args.resume is False
+        if cfg.PHASE == 2 and checkpointables is not None:
             try:
                 checkpoint.pop('iteration')
             except KeyError:
