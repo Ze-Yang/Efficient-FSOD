@@ -296,8 +296,7 @@ class AllGatherFunc(Function):
         ctx.save_for_backward(tensor)
         ctx.group = group
 
-        gather_list = [torch.zeros_like(tensor, dtype=tensor.dtype, device=tensor.device)
-                       for _ in range(dist.get_world_size(group))]
+        gather_list = [torch.zeros_like(tensor) for _ in range(dist.get_world_size(group))]
         dist.all_gather(gather_list, tensor, group)
         return tuple(gather_list)
 
