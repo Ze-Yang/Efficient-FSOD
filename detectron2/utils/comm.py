@@ -140,7 +140,7 @@ def _pad_to_largest_tensor(tensor, group):
     # gathering tensors of different shapes
     if local_size != max_size:
         size = list(tensor.size())
-        size[0] = max_size - local_size
+        size[0] = max_size - int(local_size)
         padding = torch.zeros(size, dtype=tensor.dtype, device=tensor.device)
         tensor = torch.cat((tensor, padding), dim=0)
     return size_list, tensor
