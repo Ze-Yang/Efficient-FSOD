@@ -1,0 +1,30 @@
+_BASE_: "../Base-RCNN-FPN.yaml"
+MODEL:
+  WEIGHTS: "detectron2://ImageNetPretrained/MSRA/R-50.pkl"
+  META_ON: True
+  RESNETS:
+    DEPTH: 50
+  ROI_BOX_HEAD:
+    CLS_AGNOSTIC_BBOX_REG: True
+  ROI_HEADS:
+    NUM_CLASSES: 776
+    SCORE_THRESH_TEST: 0.0001
+  ROI_META_HEAD:
+    MOMENTUM: 0.99
+INPUT:
+  MIN_SIZE_TRAIN: (640, 672, 704, 736, 768, 800)
+DATASETS:
+  TRAIN: ("lvis_v0.5_train_base",)
+  TEST: ("lvis_v0.5_val_base",)
+#SOLVER:
+#  BASE_LR: 0.02
+#  STEPS: (120000, 160000)
+#  MAX_ITER: 180000
+TEST:
+  DETECTIONS_PER_IMAGE: 300  # LVIS allows up to 300
+#DATALOADER:
+#  SAMPLER_TRAIN: "RepeatFactorTrainingSampler"
+#  REPEAT_THRESHOLD: 0.001
+OUTPUT_DIR:
+  "meta_results/LVISv0.5/base_3"
+#  "results/test"
