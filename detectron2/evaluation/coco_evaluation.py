@@ -169,6 +169,13 @@ class COCOEvaluator(DatasetEvaluator):
                 )
                 result["category_id"] = reverse_id_mapping[category_id]
 
+        # from tidecv import TIDE, datasets
+        # file_path = os.path.join(self._output_dir, "coco_instances_results.json")
+        # tide = TIDE()
+        # tide.evaluate(datasets.COCO(self._metadata.json_file), datasets.COCOResult(file_path),
+        #               mode=TIDE.BOX)  # Use TIDE.MASK for masks
+        # tide.summarize()  # Summarize the results as tables in the console
+        # tide.plot()  # Show a summary figure. Specify a folder and it'll output a png to that folder.
         if self._output_dir:
             file_path = os.path.join(self._output_dir, "coco_instances_results.json")
             self._logger.info("Saving results to {}".format(file_path))
