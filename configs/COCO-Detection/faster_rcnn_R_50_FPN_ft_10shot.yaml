@@ -1,0 +1,40 @@
+_BASE_: "../Base-RCNN-FPN.yaml"
+MODEL:
+  WEIGHTS:
+    './results/COCO60_pretrain_1/model_final.pth'
+#    'detectron2://ImageNetPretrained/MSRA/R-50.pkl'
+#    './meta_results/COCO60_pretrain_18/model_final.pth'
+#    './results/fewshot/coco/coco_10shot_6/model_0001499.pth'
+  MASK_ON: False
+  RESNETS:
+    DEPTH: 50
+  BACKBONE:
+    FREEZE: True
+  ROI_HEADS:
+    NUM_CLASSES: 20
+  ROI_BOX_HEAD:
+    CLS_AGNOSTIC_BBOX_REG: True
+    FREEZE: True
+#  PROPOSAL_GENERATOR:
+#    FREEZE: True
+DATASETS:
+  TRAIN:
+#    ('coco_2017_train_voc_split_10shot_fsod',)
+    ('coco_2017_train_voc_split',)
+  TEST: ('coco_2017_val_voc_split',)
+  SHOT: 10
+SOLVER:
+  IMS_PER_BATCH: 16
+  BASE_LR: 0.01
+  STEPS: (1400,)
+  MAX_ITER: 0
+  CHECKPOINT_PERIOD: 500
+  WARMUP_ITERS: 0
+SETTING: 'Transfer'
+PHASE: 2
+METHOD: 'ft'
+OUTPUT_DIR:
+#  ./results/fewshot/coco/coco_10shot_6
+  ./results/test
+#TEST:
+#  EVAL_PERIOD: 100
