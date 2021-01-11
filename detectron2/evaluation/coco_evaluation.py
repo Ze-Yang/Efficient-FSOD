@@ -59,6 +59,7 @@ class COCOEvaluator(DatasetEvaluator):
         self._cpu_device = torch.device("cpu")
         self._logger = logging.getLogger(__name__)
 
+        self.group = True if 'all' in dataset_name else False
         self._metadata = MetadataCatalog.get(dataset_name)
         if not hasattr(self._metadata, "json_file"):
             self._logger.warning(f"json_file was not found in MetaDataCatalog for '{dataset_name}'")
@@ -191,7 +192,7 @@ class COCOEvaluator(DatasetEvaluator):
         for task in sorted(tasks):
             coco_eval = (
                 _evaluate_predictions_on_coco(
-                    self._coco_api, self._coco_results, task, kpt_oks_sigmas=self._kpt_oks_sigmas
+                    self._coco_api, self._coco_results, task, kpt_oks_sigmas=self._kpt_oks_sigmas, group=self.group
                 )
                 if len(self._coco_results) > 0
                 else None  # cocoapi does not handle empty results very well
@@ -258,7 +259,7 @@ class COCOEvaluator(DatasetEvaluator):
         """
 
         metrics = {
-            "bbox": ["AP", "AP50", "AP75", "APs", "APm", "APl"],
+            "bbox": ["AP", "AP50", "AP75", "APs", "APm", "APl", "AR", "AR10", "AR100", "ARs", "ARm", "ARl"],
             "segm": ["AP", "AP50", "AP75", "APs", "APm", "APl"],
             "keypoints": ["AP", "AP50", "AP75", "APm", "APl"],
         }[iou_type]
@@ -268,10 +269,21 @@ class COCOEvaluator(DatasetEvaluator):
             return {metric: -1 for metric in metrics}
 
         # the standard metrics
-        results = {metric: float(coco_eval.stats[idx] * 100) for idx, metric in enumerate(metrics)}
-        self._logger.info(
-            "Evaluation results for {}: \n".format(iou_type) + create_small_table(results)
-        )
+        if self.group:
+            group_list = ['', 'b', 'n']
+        else:
+            group_list = ['']
+        results = dict()
+        for name in group_list:
+            result = {name + metric: float(coco_eval.stats[name + metric] * 100) for metric in metrics}
+            if name == 'b':
+                result_show = "Evaluation results for {} base: \n".format(iou_type) + create_small_table(result)
+            elif name == 'n':
+                result_show = "Evaluation results for {} novel: \n".format(iou_type) + create_small_table(result)
+            else:
+                result_show = "Evaluation results for {}: \n".format(iou_type) + create_small_table(result)
+            self._logger.info(result_show)
+            results.update(result)
 
         if class_names is None or len(class_names) <= 1:
             return results
@@ -480,7 +492,7 @@ def _evaluate_box_proposals(dataset_predictions, coco_api, thresholds=None, area
     }
 
 
-def _evaluate_predictions_on_coco(coco_gt, coco_results, iou_type, kpt_oks_sigmas=None):
+def _evaluate_predictions_on_coco(coco_gt, coco_results, iou_type, kpt_oks_sigmas=None, group=False):
     """
     Evaluate the coco results using COCOEval API.
     """
@@ -496,7 +508,9 @@ def _evaluate_predictions_on_coco(coco_gt, coco_results, iou_type, kpt_oks_sigma
             c.pop("bbox", None)
 
     coco_dt = coco_gt.loadRes(coco_results)
-    coco_eval = COCOeval(coco_gt, coco_dt, iou_type)
+    # coco_eval = COCOeval(coco_gt, coco_dt, iou_type)
+    coco_eval = COCOEvalFewShot(coco_gt, coco_dt, iou_type, group)
+
     # Use the COCO default keypoint OKS sigmas unless overrides are specified
     if kpt_oks_sigmas:
         coco_eval.params.kpt_oks_sigmas = np.array(kpt_oks_sigmas)
@@ -515,3 +529,96 @@ def _evaluate_predictions_on_coco(coco_gt, coco_results, iou_type, kpt_oks_sigma
     coco_eval.summarize()
 
     return coco_eval
+
+
+class COCOEvalFewShot(COCOeval):
+    def __init__(self, coco_Gt, coco_Dt, iou_type="segm", group=False):
+        super().__init__(coco_Gt, coco_Dt, iou_type)
+        novel = [0, 1, 2, 3, 4, 5, 6, 8, 14, 15, 16, 17, 18, 19, 39, 56, 57, 58, 60, 62]
+        base = [i for i in range(80) if i not in novel]
+        self.cls_groups = [base, novel]
+        self.group = group
+
+    def summarize(self):
+        '''
+        Compute and display summary metrics for evaluation results.
+        Note this functin can *only* be applied on the default parameter setting
+        '''
+
+        def _summarize(ap=1, iouThr=None, areaRng='all', maxDets=100, cls_group_idx=None):
+            p = self.params
+            iStr = ' {:<18} {} @[ IoU={:<9} | area={:>6s} | maxDets={:>3d} ] = {:0.3f}'
+            titleStr = 'Average Precision' if ap == 1 else 'Average Recall'
+            typeStr = '(AP)' if ap == 1 else '(AR)'
+            iouStr = '{:0.2f}:{:0.2f}'.format(p.iouThrs[0], p.iouThrs[-1]) \
+                if iouThr is None else '{:0.2f}'.format(iouThr)
+
+            aind = [i for i, aRng in enumerate(p.areaRngLbl) if aRng == areaRng]
+            mind = [i for i, mDet in enumerate(p.maxDets) if mDet == maxDets]
+            if ap == 1:
+                # dimension of precision: [TxRxKxAxM]
+                s = self.eval['precision']
+                # IoU
+                if iouThr is not None:
+                    t = np.where(iouThr == p.iouThrs)[0]
+                    s = s[t]
+                if cls_group_idx is not None:
+                    s = s[:, :, self.cls_groups[cls_group_idx], aind, mind]
+                else:
+                    s = s[:, :, :, aind, mind]
+            else:
+                # dimension of recall: [TxKxAxM]
+                s = self.eval['recall']
+                if iouThr is not None:
+                    t = np.where(iouThr == p.iouThrs)[0]
+                    s = s[t]
+                if cls_group_idx is not None:
+                    s = s[:, self.cls_groups[cls_group_idx], aind, mind]
+                else:
+                    s = s[:, :, aind, mind]
+            if len(s[s > -1]) == 0:
+                mean_s = -1
+            else:
+                mean_s = np.mean(s[s > -1])
+            print(iStr.format(titleStr, typeStr, iouStr, areaRng, maxDets, mean_s))
+            return mean_s
+
+        def _summarizeDets():
+            stats = dict()
+            group_names = ['', 'base ', 'novel ']
+            group_ids = [None, 0, 1]
+            name_ids = list(zip(group_names, group_ids))[:1 if not self.group else None]
+            for name, cls_group_id in name_ids:
+                print('~~~~~ Summary {}metrics ~~~~~'.format(name))
+                name = name[0] if name else name
+                stats['{}AP'.format(name)] = _summarize(1, cls_group_idx=cls_group_id)
+                stats['{}AP50'.format(name)] = _summarize(1, iouThr=.5, maxDets=self.params.maxDets[2],
+                                                          cls_group_idx=cls_group_id)
+                stats['{}AP75'.format(name)] = _summarize(1, iouThr=.75, maxDets=self.params.maxDets[2],
+                                                          cls_group_idx=cls_group_id)
+                stats['{}APs'.format(name)] = _summarize(1, areaRng='small', maxDets=self.params.maxDets[2],
+                                                         cls_group_idx=cls_group_id)
+                stats['{}APm'.format(name)] = _summarize(1, areaRng='medium', maxDets=self.params.maxDets[2],
+                                                         cls_group_idx=cls_group_id)
+                stats['{}APl'.format(name)] = _summarize(1, areaRng='large', maxDets=self.params.maxDets[2],
+                                                         cls_group_idx=cls_group_id)
+                stats['{}AR'.format(name)] = _summarize(0, maxDets=self.params.maxDets[0],
+                                                        cls_group_idx=cls_group_id)
+                stats['{}AR10'.format(name)] = _summarize(0, maxDets=self.params.maxDets[1],
+                                                          cls_group_idx=cls_group_id)
+                stats['{}AR100'.format(name)] = _summarize(0, maxDets=self.params.maxDets[2],
+                                                           cls_group_idx=cls_group_id)
+                stats['{}ARs'.format(name)] = _summarize(0, areaRng='small', maxDets=self.params.maxDets[2],
+                                                         cls_group_idx=cls_group_id)
+                stats['{}ARm'.format(name)] = _summarize(0, areaRng='medium', maxDets=self.params.maxDets[2],
+                                                         cls_group_idx=cls_group_id)
+                stats['{}ARl'.format(name)] = _summarize(0, areaRng='large', maxDets=self.params.maxDets[2],
+                                                         cls_group_idx=cls_group_id)
+            return stats
+
+        if not self.eval:
+            raise Exception('Please run accumulate() first')
+        iouType = self.params.iouType
+        if iouType == 'segm' or iouType == 'bbox':
+            summarize = _summarizeDets
+        self.stats = summarize()
