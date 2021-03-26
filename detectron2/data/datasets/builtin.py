@@ -195,7 +195,7 @@ _PREDEFINED_SPLITS_LVIS = {
         "lvis_v0.5_val_rand_100": ("coco/", "lvis/lvis_v0.5_val_rand_100.json"),
         "lvis_v0.5_test": ("coco/", "lvis/lvis_v0.5_image_info_test.json"),
         # few-shot sets
-        "lvis_v0.5_train_10shot": ("coco/", "lvissplit/lvis_10shot.json"),
+        "lvis_v0.5_train_10shot": ("coco/", "lvis/lvis_v0.5_train.json"),
     },
     "lvis_v0.5_cocofied": {
         "lvis_v0.5_train_cocofied": ("coco/", "lvis/lvis_v0.5_train_cocofied.json"),

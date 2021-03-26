@@ -1,6 +1,7 @@
 _BASE_: "../Base-RCNN-FPN.yaml"
+SEED: 100
 MODEL:
-  WEIGHTS: "results/LVISv0.5/base_1/model_final.pth"
+  WEIGHTS: "results/LVISv0.5/base_2/model_final.pth"
   MASK_ON: False
   RESNETS:
     DEPTH: 50
@@ -9,9 +10,9 @@ MODEL:
   ROI_HEADS:
     NUM_CLASSES: 1230
     SCORE_THRESH_TEST: 0.0001
-#   ROI_BOX_HEAD:
-#    CLS_AGNOSTIC_BBOX_REG: True
-#    FREEZE: True
+  ROI_BOX_HEAD:
+    CLS_AGNOSTIC_BBOX_REG: True
+    FREEZE: True
 #  PROPOSAL_GENERATOR:
 #    FREEZE: True
 INPUT:
@@ -19,16 +20,17 @@ INPUT:
 DATASETS:
   TRAIN: ("lvis_v0.5_train_10shot",)
   TEST: ("lvis_v0.5_val_all",)
+  SHOT: 10
 SOLVER:
   IMS_PER_BATCH: 16
-  BASE_LR: 0.005
+  BASE_LR: 0.01
   STEPS: (10000,)
-  MAX_ITER: 0
+  MAX_ITER: 10000
   CHECKPOINT_PERIOD: 500
   WARMUP_ITERS: 0
 TEST:
   DETECTIONS_PER_IMAGE: 300  # LVIS allows up to 300
-  EVAL_PERIOD: 500
+#  EVAL_PERIOD: 500
 #DATALOADER:
 #  SAMPLER_TRAIN: "RepeatFactorTrainingSampler"
 #  REPEAT_THRESHOLD: 0.001
@@ -36,5 +38,4 @@ SETTING: 'Incremental'
 PHASE: 2
 METHOD: 'ft'
 OUTPUT_DIR:
-#  "results/LVISv0.5/fewshot/10shot_1"
-  "results/test"
+  "results/fewshot/LVISv0.5/R50_ft_1"

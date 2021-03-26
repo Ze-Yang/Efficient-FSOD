@@ -1,10 +1,10 @@
 _BASE_: "../Base-RCNN-FPN.yaml"
 SEED: 100
 MODEL:
-  WEIGHTS: "results/LVISv0.5/base_2/model_final.pth"
+  WEIGHTS: "results/LVISv0.5/base_R101_2/model_final.pth"
   MASK_ON: False
   RESNETS:
-    DEPTH: 50
+    DEPTH: 101
   BACKBONE:
     FREEZE: True
   ROI_HEADS:
@@ -39,4 +39,4 @@ PHASE: 2
 METHOD: 'imprinted'
 INIT_ITERS: 600
 OUTPUT_DIR:
-  "results/fewshot/LVISv0.5/R50_imprint_1"
+  "results/fewshot/LVISv0.5/R101_imprint_1"

@@ -1,10 +1,10 @@
 _BASE_: "../Base-RCNN-FPN.yaml"
 SEED: 100
 MODEL:
-  WEIGHTS: "results/LVISv0.5/base_2/model_final.pth"
+  WEIGHTS: "results/LVISv0.5/base_R101_2/model_final.pth"
   MASK_ON: False
   RESNETS:
-    DEPTH: 50
+    DEPTH: 101
   BACKBONE:
     FREEZE: True
   ROI_HEADS:
@@ -24,8 +24,8 @@ DATASETS:
 SOLVER:
   IMS_PER_BATCH: 16
   BASE_LR: 0.01
-  STEPS: (1500,)
-  MAX_ITER: 3000
+  STEPS: (10000,)
+  MAX_ITER: 10000
   CHECKPOINT_PERIOD: 500
   WARMUP_ITERS: 0
 TEST:
@@ -36,7 +36,6 @@ TEST:
 #  REPEAT_THRESHOLD: 0.001
 SETTING: 'Incremental'
 PHASE: 2
-METHOD: 'imprinted'
-INIT_ITERS: 600
+METHOD: 'ft'
 OUTPUT_DIR:
-  "results/fewshot/LVISv0.5/R50_imprint_1"
+  "results/fewshot/LVISv0.5/R101_ft_1"

@@ -1,11 +1,13 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 import logging
 import os
+import random
 from fvcore.common.file_io import PathManager
 from fvcore.common.timer import Timer
 
 from detectron2.data import DatasetCatalog, MetadataCatalog
 from detectron2.structures import BoxMode
+from detectron2.config import global_cfg as cfg
 
 from .builtin_meta import _get_coco_instances_meta
 from .lvis_v0_5_categories import LVIS_CATEGORIES as LVIS_V0_5_CATEGORIES
@@ -64,7 +66,7 @@ def load_lvis_json(json_file, image_root, dataset_name=None):
     if dataset_name is not None:
         meta = MetadataCatalog.get(dataset_name)
         cat_ids = lvis_api.get_cat_ids()
-        if 'all' in dataset_name:
+        if 'all' in dataset_name or 'shot' in dataset_name:
             id_base = [cat['id'] for cat in lvis_api.dataset['categories'] if cat['frequency'] in ('f', 'c')]
             id_novel = [cat['id'] for cat in lvis_api.dataset['categories'] if cat['frequency'] == 'r']
             cat_ids = id_base + id_novel
@@ -120,6 +122,9 @@ def load_lvis_json(json_file, image_root, dataset_name=None):
 
     dataset_dicts = []
 
+    random.Random(cfg.SEED).shuffle(imgs_anns)
+    cls_num_base = {i: 0 for i in range(776)}
+    cls_num_novel = {i: 0 for i in range(776, 1230)}
     for (img_dict, anno_dict_list) in imgs_anns:
         record = {}
         record["file_name"] = get_file_name(image_root, img_dict)
@@ -130,6 +135,7 @@ def load_lvis_json(json_file, image_root, dataset_name=None):
         image_id = record["image_id"] = img_dict["id"]
 
         objs = []
+        find = False
         for anno in anno_dict_list:
             # Check that the image_id in this annotation is the same as
             # the image_id we're looking at.
@@ -142,6 +148,17 @@ def load_lvis_json(json_file, image_root, dataset_name=None):
                 obj["category_id"] = id_map[anno["category_id"]]
             except NameError:
                 obj["category_id"] = anno["category_id"] - 1  # Convert 1-indexed to 0-indexed
+
+            if 'train' in dataset_name and cfg.PHASE == 2:
+                if obj["category_id"] < 776 and cls_num_base[obj["category_id"]] < cfg.DATASETS.SHOT:
+                    find = True
+                    cls_num_base[obj["category_id"]] += 1
+                elif obj["category_id"] >= 776 and cls_num_novel[obj["category_id"]] < 30:
+                    find = True
+                    cls_num_novel[obj["category_id"]] += 1
+                else:
+                    obj["category_id"] = -1
+
             segm = anno["segmentation"]  # list[list[float]]
             # filter out invalid polygons (< 3 points)
             valid_segm = [poly for poly in segm if len(poly) % 2 == 0 and len(poly) >= 6]
@@ -151,8 +168,15 @@ def load_lvis_json(json_file, image_root, dataset_name=None):
             assert len(segm) > 0
             obj["segmentation"] = segm
             objs.append(obj)
-        record["annotations"] = objs
-        dataset_dicts.append(record)
+        if 'train' in dataset_name and cfg.PHASE == 2:
+            if find:
+                record["annotations"] = objs
+                dataset_dicts.append(record)
+            if min(cls_num_base.values()) == cfg.DATASETS.SHOT and min(cls_num_novel.values()) == 30:
+                break
+        else:
+            record["annotations"] = objs
+            dataset_dicts.append(record)
 
     return dataset_dicts
 
