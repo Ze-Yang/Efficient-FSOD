@@ -162,7 +162,7 @@ Category ids in annotations are not in [1, #categories]! We'll apply a mapping f
     #     logger.info(f"Caching annotations in COCO format: {output_file}")
     #     json.dump(coco_dict, json_file)
 
-    # random.shuffle(imgs_anns)
+    random.Random(cfg.SEED).shuffle(imgs_anns)
     # images = []
     # annotations = []
     cls_num = {i: 0 for i in id_map.keys()}
@@ -191,23 +191,31 @@ Category ids in annotations are not in [1, #categories]! We'll apply a mapping f
 
             cls_id = obj["category_id"]
             if 'train' in dataset_name:
-                box_area = obj['bbox'][2] * obj['bbox'][3]
+                # box_area = obj['bbox'][2] * obj['bbox'][3]
+                # x1 = np.max((0, obj['bbox'][0]))
+                # y1 = np.max((0, obj['bbox'][1]))
+                # x2 = np.min((width - 1, x1 + np.max((0, obj['bbox'][2] - 1))))
+                # y2 = np.min((height - 1, y1 + np.max((0, obj['bbox'][3] - 1))))
+                # if not (box_area > 0 and x2 >= x1 and y2 >= y1):
+                #     continue
                 if cfg.PHASE == 1:
                     # if box_area < 32 * 32:  # filter out objects with area less than 32 x 32
                     #     cls_id = -1
                     pass
                 elif cfg.PHASE == 2:
-                    if not find:
+                    # if not find:
                         # if uncomment this, need to change the next 'if' to 'elif'
                         # if box_area < 64 * 64 or box_area > 224 * 224:
                         #     cls_id = -1
-                        if cls_num[cls_id] < cfg.DATASETS.SHOT:
-                            find = True
-                            cls_num[cls_id] += 1
-                        else:
-                            cls_id = -1
+                    if obj["iscrowd"]:
+                        cls_id = -1
+                    elif cls_num[cls_id] < cfg.DATASETS.SHOT:
+                        find = True
+                        cls_num[cls_id] += 1
                     else:
                         cls_id = -1
+                    # else:
+                    #     cls_id = -1
 
             segm = anno.get("segmentation", None)
             if segm:  # either list[list[float]] or dict(RLE)

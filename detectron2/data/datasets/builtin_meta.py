@@ -204,6 +204,12 @@ def _get_coco_instances_meta(dataset_name=''):
         thing_classes = [COCO_CATEGORIES[k]["name"] for k in id_map]
         thing_colors = [COCO_CATEGORIES[k]["color"] for k in id_map]
         assert len(thing_ids) == 20, len(thing_ids)
+    elif 'all' in dataset_name:
+        id_map = nonvoc_inds + voc_inds
+        thing_ids = [thing_ids[i] for i in id_map]
+        thing_colors = [k["color"] for k in COCO_CATEGORIES if k["isthing"] == 1]
+        thing_classes = [k["name"] for k in COCO_CATEGORIES if k["isthing"] == 1]
+        assert len(thing_ids) == 80, len(thing_ids)
     else:
         thing_colors = [k["color"] for k in COCO_CATEGORIES if k["isthing"] == 1]
         thing_classes = [k["name"] for k in COCO_CATEGORIES if k["isthing"] == 1]
