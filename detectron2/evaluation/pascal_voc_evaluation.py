@@ -102,7 +102,7 @@ class PascalVOCDetectionEvaluator(DatasetEvaluator):
             res_file_template = os.path.join(dirname, "{}.txt")
 
             aps = defaultdict(list)  # iou -> ap per class
-            for cls_id, cls_name in enumerate(self._class_names):
+            for cls_id, cls_name in enumerate(self._class_names[:15 if global_cfg.PHASE == 1 else None]):
                 lines = predictions.get(cls_id, [""])
 
                 with open(res_file_template.format(cls_name), "w") as f:

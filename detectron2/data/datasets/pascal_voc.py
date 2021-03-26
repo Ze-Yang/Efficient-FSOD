@@ -52,9 +52,7 @@ def load_voc_instances(name: str, dirname: str, split: str):
         dirname: Contain "Annotations", "ImageSets", "JPEGImages"
         split (str): one of "train", "test", "val", "trainval"
     """
-    # parse the class split information
-    index = name.find('split')
-    cls_split = int(name[index + len('split')])
+    thing_classes = MetadataCatalog.get(name).thing_classes
 
     # legacy data shots, which are constructed by sampling only one instance of interest per image.
     # if 'train' in split and cfg.PHASE == 2:
@@ -81,14 +79,14 @@ def load_voc_instances(name: str, dirname: str, split: str):
         }
         instances = []
 
-        for i, obj in enumerate(tree.findall("object")):
+        for obj in tree.findall("object"):
             cls = obj.find("name").text
             # We include "difficult" samples in training.
             # Based on limited experiments, they don't hurt accuracy.
             difficult = int(obj.find("difficult").text)
             if cfg.PHASE == 2 and difficult == 1 and 'train' in split:
                 continue
-            if cfg.PHASE == 1 and cls not in CLASS_NAMES[cls_split][:15]:
+            if cfg.PHASE == 1 and cls not in thing_classes:
                 continue
             bbox = obj.find("bndbox")
             bbox = [float(bbox.find(x).text) for x in ["xmin", "ymin", "xmax", "ymax"]]
@@ -99,8 +97,7 @@ def load_voc_instances(name: str, dirname: str, split: str):
             bbox[0] -= 1.0
             bbox[1] -= 1.0
             instances.append(
-                {"category_id": -1 if cfg.INSTANCE_SHOT and i not in [0] and 'train' in split else
-                    CLASS_NAMES[cls_split].index(cls), "bbox": bbox, "bbox_mode": BoxMode.XYXY_ABS}
+                {"category_id": thing_classes.index(cls), "bbox": bbox, "bbox_mode": BoxMode.XYXY_ABS}
             )
         r["annotations"] = instances
         dicts.append(r)

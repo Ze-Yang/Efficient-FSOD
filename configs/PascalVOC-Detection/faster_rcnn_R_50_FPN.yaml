@@ -4,24 +4,15 @@ MODEL:
   MASK_ON: False
   RESNETS:
     DEPTH: 50
-  ROI_BOX_HEAD:
-    CLS_AGNOSTIC_BBOX_REG: True
   ROI_HEADS:
-    NUM_CLASSES: 15
+    NUM_CLASSES: 20
 INPUT:
   MIN_SIZE_TRAIN: (480, 512, 544, 576, 608, 640, 672, 704, 736, 768, 800)
   MIN_SIZE_TEST: 800
 DATASETS:
-  TRAIN: ('voc_2007_trainval_split1_base', 'voc_2012_trainval_split1_base')
-  TEST: ('voc_2007_test_split1_base',)
-#  TRAIN: ('voc_2007_trainval', 'voc_2012_trainval')
-#  TEST: ('voc_2007_test',)
+  TRAIN: ('voc_2007_trainval', 'voc_2012_trainval')
+  TEST: ('voc_2007_test',)
 SOLVER:
   STEPS: (12000, 16000)
   MAX_ITER: 18000  # 17.4 epochs
   WARMUP_ITERS: 100
-PHASE: 1
-OUTPUT_DIR:
-  ./results/VOC_split1_pretrain
-#  ./results/VOC_full
-
