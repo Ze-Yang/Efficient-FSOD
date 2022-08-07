@@ -320,9 +320,13 @@ class EvalHook(HookBase):
         self._period = eval_period
         self._func = eval_function
         self._done_eval_at_last = False
+        self.AP_result = {}
 
     def _do_eval(self):
         results = self._func()
+
+        if comm.is_main_process():
+            self.AP_result[self.trainer.iter + 1] = results['bbox']
 
         if results:
             assert isinstance(
@@ -358,6 +362,10 @@ class EvalHook(HookBase):
         # func is likely a closure that holds reference to the trainer
         # therefore we clean it to avoid circular reference in the end
         del self._func
+        if comm.is_main_process():
+            import pickle
+            with open('{}/AP_results.pkl'.format(cfg.OUTPUT_DIR), 'wb') as handle:
+                pickle.dump(self.AP_result, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 class PreciseBN(HookBase):

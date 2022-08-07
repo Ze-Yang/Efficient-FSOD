@@ -22,6 +22,7 @@ import logging
 import os
 from collections import OrderedDict
 import torch
+import pickle
 from torch.nn.parallel import DistributedDataParallel
 # from visualize_reweight import tensor_display
 
@@ -56,6 +57,8 @@ from detectron2.utils.events import (
 )
 
 logger = logging.getLogger("detectron2")
+
+AP_result = dict()
 
 
 def get_evaluator(cfg, dataset_name, output_folder=None):
@@ -187,7 +190,9 @@ def do_train(cfg, model, resume=False):
                 and iteration % cfg.TEST.EVAL_PERIOD == 0
                 and iteration != max_iter
             ):
-                do_test(cfg, model)
+                results = do_test(cfg, model)
+                if comm.is_main_process():
+                    AP_result[iteration] = results['bbox']
                 # Compared to "train_net.py", the test results are not dumped to EventStorage
                 comm.synchronize()
 
@@ -230,7 +235,12 @@ def main(args):
         )
 
     do_train(cfg, model, resume=args.resume)
-    return do_test(cfg, model)
+    results = do_test(cfg, model)
+    if comm.is_main_process():
+        AP_result[cfg.SOLVER.MAX_ITER] = results['bbox']
+        with open('{}/AP_results.pkl'.format(cfg.OUTPUT_DIR), 'wb') as handle:
+            pickle.dump(AP_result, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    return results
 
 
 if __name__ == "__main__":
