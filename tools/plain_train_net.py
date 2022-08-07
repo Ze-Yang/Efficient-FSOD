@@ -185,6 +185,9 @@ def do_train(cfg, model, resume=False):
             storage.put_scalar("lr", optimizer.param_groups[0]["lr"], smoothing_hint=False)
             scheduler.step()
 
+            periodic_checkpointer.step(iteration - 1)
+            # Do evaluation after checkpointer, because then if it fails,
+            # we can use the saved checkpoint to debug.
             if (
                 cfg.TEST.EVAL_PERIOD > 0
                 and iteration % cfg.TEST.EVAL_PERIOD == 0
@@ -199,7 +202,6 @@ def do_train(cfg, model, resume=False):
             if iteration - start_iter > 5 and (iteration % 20 == 0 or iteration == max_iter):
                 for writer in writers:
                     writer.write()
-            periodic_checkpointer.step(iteration)
 
 
 def setup(args):
