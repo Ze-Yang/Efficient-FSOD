@@ -37,6 +37,11 @@ def build_optimizer(cfg: CfgNode, model: torch.nn.Module) -> torch.optim.Optimiz
             # weights.
             lr = cfg.SOLVER.BASE_LR * cfg.SOLVER.BIAS_LR_FACTOR
             weight_decay = cfg.SOLVER.WEIGHT_DECAY_BIAS
+        if ('roi_heads.box_head' in key or 'roi_heads.res5' in key) and cfg.PHASE == 2 \
+                and cfg.MODEL.ROI_BOX_HEAD.LR_FACTOR != 1.0:
+            lr = lr * cfg.MODEL.ROI_BOX_HEAD.LR_FACTOR
+            logger.info('The lr for {} is multiply by {}.'.format(key, cfg.MODEL.ROI_BOX_HEAD.LR_FACTOR))
+
         params += [{"params": [value], "lr": lr, "weight_decay": weight_decay}]
 
     optimizer = torch.optim.SGD(params, lr, momentum=cfg.SOLVER.MOMENTUM)

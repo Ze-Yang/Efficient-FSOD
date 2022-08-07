@@ -31,6 +31,7 @@ class GeneralizedRCNN(nn.Module):
     def __init__(self, cfg):
         super().__init__()
 
+        self.cfg = cfg
         self.device = torch.device(cfg.MODEL.DEVICE)
         self.backbone = build_backbone(cfg)
         self.proposal_generator = build_proposal_generator(cfg, self.backbone.output_shape())
@@ -56,9 +57,17 @@ class GeneralizedRCNN(nn.Module):
             logger.info('Freeze proposal generator parameters')
 
         if cfg.MODEL.ROI_BOX_HEAD.FREEZE:
-            for p in self.roi_heads.box_head.parameters():
-                p.requires_grad = False
-            logger.info('Freeze roi_box_head parameters')
+            if cfg.MODEL.ROI_HEADS.NAME == "StandardROIHeads":
+                for p in self.roi_heads.box_head.parameters():
+                    p.requires_grad = False
+                logger.info('Freeze box_head parameters')
+            elif cfg.MODEL.ROI_HEADS.NAME == "Res5ROIHeads":
+                for p in self.roi_heads.res5.parameters():
+                    p.requires_grad = False
+                logger.info('Freeze res5 parameters')
+            else:
+                raise NotImplementedError("Freeze roi_box_head does not support {}."
+                                          .format(cfg.MODEL.ROI_HEADS.NAME))
 
         if cfg.MODEL.ROI_META_HEAD.FREEZE:
             for p in self.roi_heads.meta_head.parameters():
@@ -71,6 +80,41 @@ class GeneralizedRCNN(nn.Module):
             for p in self.roi_heads.mask_head.predictor.parameters():
                 p.requires_grad = True
             logger.info('Freeze roi_mask_head parameters')
+
+    def unfreeze_box_head(self, optimizer, scheduler):
+        if self.cfg.MODEL.ROI_HEADS.NAME == "StandardROIHeads":
+            for p in self.roi_heads.box_head.parameters():
+                p.requires_grad = True
+        elif self.cfg.MODEL.ROI_HEADS.NAME == "Res5ROIHeads":
+            for p in self.roi_heads.res5.parameters():
+                p.requires_grad = True
+        else:
+            raise NotImplementedError("Unfreeze_box_head does not support {}."
+                                      .format(self.cfg.MODEL.ROI_HEADS.NAME))
+        base_lrs = []
+        optimizer.param_groups = []
+        for key, value in self.named_parameters():
+            if not value.requires_grad:
+                continue
+            lr = self.cfg.SOLVER.BASE_LR
+            weight_decay = self.cfg.SOLVER.WEIGHT_DECAY
+            if key.endswith("norm.weight") or key.endswith("norm.bias"):
+                weight_decay = self.cfg.SOLVER.WEIGHT_DECAY_NORM
+            elif key.endswith(".bias"):
+                # NOTE: unlike Detectron v1, we now default BIAS_LR_FACTOR to 1.0
+                # and WEIGHT_DECAY_BIAS to WEIGHT_DECAY so that bias optimizer
+                # hyperparameters are by default exactly the same as for regular
+                # weights.
+                lr = self.cfg.SOLVER.BASE_LR * self.cfg.SOLVER.BIAS_LR_FACTOR
+                weight_decay = self.cfg.SOLVER.WEIGHT_DECAY_BIAS
+            if ('res5' in key or 'box_head' in key) and self.cfg.PHASE == 2 and \
+                    self.cfg.MODEL.ROI_BOX_HEAD.LR_FACTOR != 1.0:
+                lr = lr * self.cfg.MODEL.ROI_BOX_HEAD.LR_FACTOR
+                logger.info('The lr for {} is multiply by 0.1.'.format(key))
+            optimizer.add_param_group({"params": [value], "lr": lr, "weight_decay": weight_decay, "initial_lr": lr})
+            base_lrs.append(lr)
+        scheduler.base_lrs = base_lrs
+        logger.info('Unfreeze roi_box_head parameters')
 
     def visualize_training(self, batched_inputs, proposals):
         """

@@ -343,6 +343,9 @@ _C.MODEL.ROI_BOX_HEAD.PREDICTOR = "FastRCNNOutputLayers"
 # scale of cosine similarity (set to -1 for learnable scale)
 _C.MODEL.ROI_BOX_HEAD.COSINE_SCALE = 20.0
 
+_C.MODEL.ROI_BOX_HEAD.LR_FACTOR = 1.0
+_C.MODEL.ROI_BOX_HEAD.UNFREEZE_ITER = -1
+
 # ---------------------------------------------------------------------------- #
 # Cascaded Box Head
 # ---------------------------------------------------------------------------- #

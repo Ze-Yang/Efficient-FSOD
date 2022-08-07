@@ -164,6 +164,9 @@ def do_train(cfg, model, resume=False):
             iteration = iteration + 1
             storage.step()
 
+            if iteration == cfg.MODEL.ROI_BOX_HEAD.UNFREEZE_ITER:
+                model.module.unfreeze_box_head(optimizer, scheduler)
+
             loss_dict = model(data)
             losses = sum(loss for loss in loss_dict.values())
             assert torch.isfinite(losses).all(), loss_dict

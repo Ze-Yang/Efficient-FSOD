@@ -17,6 +17,7 @@ from fvcore.nn.precise_bn import get_bn_modules, update_bn_stats
 import detectron2.utils.comm as comm
 from detectron2.evaluation.testing import flatten_results_dict
 from detectron2.utils.events import EventStorage, EventWriter
+from detectron2.config import global_cfg as cfg
 
 from .train_loop import HookBase
 
@@ -227,6 +228,8 @@ class LRScheduler(HookBase):
     def after_step(self):
         lr = self._optimizer.param_groups[self._best_param_group_id]["lr"]
         self.trainer.storage.put_scalar("lr", lr, smoothing_hint=False)
+        if (self.trainer.iter + 1) == cfg.MODEL.ROI_BOX_HEAD.UNFREEZE_ITER:
+            self.trainer.model.module.unfreeze_box_head(self._optimizer, self._scheduler)
         self._scheduler.step()
 
 
