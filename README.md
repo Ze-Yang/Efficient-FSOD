@@ -1,56 +1,58 @@
-<img src=".github/Detectron2-Logo-Horz.svg" width="300" >
+## Efficient Few-Shot Object Detection via Knowledge Inheritance
 
-Detectron2 is Facebook AI Research's next generation software system
-that implements state-of-the-art object detection algorithms.
-It is a ground-up rewrite of the previous version,
-[Detectron](https://github.com/facebookresearch/Detectron/),
-and it originates from [maskrcnn-benchmark](https://github.com/facebookresearch/maskrcnn-benchmark/).
+This repository contains the official implementation for the paper 
+[Efficient Few-Shot Object Detection via Knowledge Inheritance](https://arxiv.org/abs/2203.12224).
+The codes are built upon 
+[Detectron2](https://github.com/facebookresearch/detectron2). Many thanks to
+their awesome open-source library.
 
 <div align="center">
-  <img src="https://user-images.githubusercontent.com/1381301/66535560-d3422200-eace-11e9-9123-5535d469db19.png"/>
+  <img src="demo/main.png"/>
 </div>
 
-### What's New
-* It is powered by the [PyTorch](https://pytorch.org) deep learning framework.
-* Includes more features such as panoptic segmentation, densepose, Cascade R-CNN, rotated bounding boxes, etc.
-* Can be used as a library to support [different projects](projects/) on top of it.
-  We'll open source more research projects in this way.
-* It [trains much faster](https://detectron2.readthedocs.io/notes/benchmarks.html).
+We build a highly efficient pretrain-transfer framework (PTF) baseline without extra overheads for FSOD.
+Upon this baseline, we devise an initializer named knowledge inheritance (KI) to reliably initialize the
+novel weights for the box classifier.
+Qualitative results on Pascal-VOC, COCO and LVIS demonstrate our approach sets new state of the art with
+higher efficiency.
+We hope to motivate a trend toward powerful yet efficient few-shot technique development.
 
-See our [blog post](https://ai.facebook.com/blog/-detectron2-a-pytorch-based-modular-object-detection-library-/)
-to see more demos and learn about detectron2.
+## News:
+We will release the full codes along with detailed instructions by 10 Aug 2022.
+
+## Citing Efficient-FSOD
+If you find this repository useful in your research, please consider to cite our paper with the following
+BibTeX entry.
+```BibTeX
+@article{yang2022efficient,
+  title={Efficient Few-Shot Object Detection via Knowledge Inheritance},
+  author={Yang, Ze and Zhang, Chi and Li, Ruibo and Lin, Guosheng},
+  journal={arXiv preprint arXiv:2203.12224},
+  year={2022}
+}
+```
 
 ## Installation
+```
+# install pytorch and cuda, please follow the versions specified in the command below
+conda install pytorch==1.4.0 python=3.7 torchvision==0.5.0 cudatoolkit=10.0 -c pytorch
 
-See [INSTALL.md](INSTALL.md).
+# clone our repo and install detectron2
+git clone https://github.com/Ze-Yang/Efficient-FSOD.git
+cd Efficient-FSOD && pip install -e .
+
+# install pycocotools, lvis-api and tensorboard
+pip install cython; pip install 'git+https://github.com/cocodataset/cocoapi.git#subdirectory=PythonAPI'
+pip install git+https://github.com/lvis-dataset/lvis-api.git
+pip install tensorboard
+```
+To __rebuild__ detectron2, `rm -rf build/ **/*.so` then `pip install -e .`.
+You often need to rebuild detectron2 after reinstalling PyTorch.
 
 ## Quick Start
-
-See [GETTING_STARTED.md](GETTING_STARTED.md),
-or the [Colab Notebook](https://colab.research.google.com/drive/16jcaJoc6bCFAQ96jDe2HwtXj7BMD_-m5).
-
-Learn more at our [documentation](https://detectron2.readthedocs.org).
-And see [projects/](projects/) for some projects that are built on top of detectron2.
-
-## Model Zoo and Baselines
-
-We provide a large set of baseline results and trained models available for download in the [Detectron2 Model Zoo](MODEL_ZOO.md).
-
+Details about how to use this repository is coming soon.
 
 ## License
 
-Detectron2 is released under the [Apache 2.0 license](LICENSE).
+This repository is released under the [Apache 2.0 license](LICENSE).
 
-## Citing Detectron
-
-If you use Detectron2 in your research or wish to refer to the baseline results published in the [Model Zoo](MODEL_ZOO.md), please use the following BibTeX entry.
-
-```BibTeX
-@misc{wu2019detectron2,
-  author =       {Yuxin Wu and Alexander Kirillov and Francisco Massa and
-                  Wan-Yen Lo and Ross Girshick},
-  title =        {Detectron2},
-  howpublished = {\url{https://github.com/facebookresearch/detectron2}},
-  year =         {2019}
-}
-```
