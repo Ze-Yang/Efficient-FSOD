@@ -209,7 +209,7 @@ def create_small_table(small_dict):
         [values],
         headers=keys,
         tablefmt="pipe",
-        floatfmt=".3f",
+        floatfmt=".2f",
         stralign="center",
         numalign="center",
     )
