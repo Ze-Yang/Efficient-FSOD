@@ -159,6 +159,10 @@ def do_train(cfg, model, resume=False):
     if cfg.PHASE == 2:
         init_weight(cfg, model, data_loader, checkpointer)
         data_loader._buckets = [[] for _ in range(2)]
+        if cfg.TEST.INIT_EVAL:
+            results = do_test(cfg, model)
+            if comm.is_main_process():
+                AP_result[0] = results['bbox']
 
     assert model.training, 'Model.train() must be True during training.'
     logger.info("Starting training from iteration {}".format(start_iter))

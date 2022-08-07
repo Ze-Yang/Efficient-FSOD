@@ -326,7 +326,7 @@ class EvalHook(HookBase):
         results = self._func()
 
         if comm.is_main_process():
-            self.AP_result[self.trainer.iter + 1] = results['bbox']
+            self.AP_result[self.trainer.iter + 1 if self.trainer.iter > 0 else 0] = results['bbox']
 
         if results:
             assert isinstance(
@@ -347,6 +347,10 @@ class EvalHook(HookBase):
         # Evaluation may take different time among workers.
         # A barrier make them start the next iteration together.
         comm.synchronize()
+
+    def before_train(self):
+        if cfg.TEST.INIT_EVAL:
+            self._do_eval()
 
     def after_step(self):
         next_iter = self.trainer.iter + 1
