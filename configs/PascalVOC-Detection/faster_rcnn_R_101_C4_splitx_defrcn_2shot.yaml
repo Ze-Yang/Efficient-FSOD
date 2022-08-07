@@ -1,0 +1,31 @@
+_BASE_: "../Base-RCNN-C4.yaml"
+MODEL:
+  WEIGHTS: "/Path/to/Base/Pretrain/Weight"
+  MASK_ON: False
+  BACKBONE:
+    FREEZE: True
+  RESNETS:
+    DEPTH: 101
+  ROI_BOX_HEAD:
+    POOLER_RESOLUTION: 7
+    FREEZE: True
+  ROI_HEADS:
+    NUM_CLASSES: 20
+INPUT:
+  MIN_SIZE_TRAIN: (480, 512, 544, 576, 608, 640, 672, 704, 736, 768, 800)
+  MIN_SIZE_TEST: 800
+DATASETS:
+  TRAIN: ('voc_2007_trainval_split{}_2shot', 'voc_2012_trainval_split{}_2shot')
+  TEST: ('voc_2007_test_split{}_all',)
+SOLVER:
+  IMS_PER_BATCH: 16
+  BASE_LR: 0.01
+  STEPS: (1200,)
+  MAX_ITER: 1500
+  CHECKPOINT_PERIOD: 100000
+  WARMUP_ITERS: 0
+  WEIGHT_DECAY: 5e-5
+SETTING: 'Incremental'
+PHASE: 2
+METHOD: 'ft'
+OUTPUT_DIR: "/Path/to/Output/Dir"
