@@ -158,15 +158,6 @@ def load_lvis_json(json_file, image_root, dataset_name=None):
                     cls_num_novel[obj["category_id"]] += 1
                 else:
                     obj["category_id"] = -1
-
-            segm = anno["segmentation"]  # list[list[float]]
-            # filter out invalid polygons (< 3 points)
-            valid_segm = [poly for poly in segm if len(poly) % 2 == 0 and len(poly) >= 6]
-            assert len(segm) == len(
-                valid_segm
-            ), "Annotation contains an invalid polygon with < 3 points"
-            assert len(segm) > 0
-            obj["segmentation"] = segm
             objs.append(obj)
         if 'train' in dataset_name and cfg.PHASE == 2:
             if find:
