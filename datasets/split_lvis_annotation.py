@@ -9,7 +9,7 @@ def parse_args():
                         default="datasets/lvis",
                         help='path to the annotation file')
     parser.add_argument('--split', type=str, nargs='*',
-                        default="lvis_v0.5_train lvis_v1_train lvis_v0.5_val lvis_v1_val".split(),
+                        default="lvis_v0.5_train".split(),
                         help='path to the annotation file')
     parser.add_argument('--save-dir', type=str,
                         default="datasets/lvis",
@@ -26,17 +26,14 @@ def split_annotation(data_path, split, save_dir):
         ann_s = {
             'info': ann_train['info'],
             'licenses': ann_train['licenses'],
-            # We use the whole original dataset images, though some of them may contain no annotations
-            # after the split operation. In other words, the images that do not contain target category
-            # object should also be included, as they will be used to penalize the false positive
-            # predictions from the detector during inference. As for training, these images will be
-            # automatically filtered out in the data construction procedure.
-            'images': ann_train['images'],
         }
         ids = [cat['id'] for cat in ann_train['categories'] if cat['frequency'] in s]
         ann_s['categories'] = [ann for ann in ann_train['categories'] if ann['id'] in ids]
         ann_s['annotations'] = [
             ann for ann in ann_train['annotations'] if ann['category_id'] in ids]
+        img_ids = set([ann['image_id'] for ann in ann_s['annotations']])
+        new_images = [img for img in ann_train['images'] if img['id'] in img_ids]
+        ann_s['images'] = new_images
 
         save_path = os.path.join(save_dir, '{}_{}.json'.format(split, name))
         print('Saving {} annotations to {}.'.format(name, save_path))
