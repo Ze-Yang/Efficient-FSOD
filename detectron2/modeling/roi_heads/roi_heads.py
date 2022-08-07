@@ -607,6 +607,7 @@ class StandardROIHeads(ROIHeads):
             if targets is not None:  # for cls_score parameters initialization
                 return self._init_weight(features_list, targets)
             del targets
+            # proposals[0] = proposals[0][:512]  # for calculating the training FLOPs
             pred_instances = self._forward_box(features_list, proposals)
             # During inference cascaded prediction is used: the mask and keypoints heads are only
             # applied to the top scoring box detections.
