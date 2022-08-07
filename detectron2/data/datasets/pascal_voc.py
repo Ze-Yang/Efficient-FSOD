@@ -38,8 +38,15 @@ CLASS_NAMES_split3 = [
     'tvmonitor', 'boat', 'cat', 'motorbike', 'sheep', 'sofa'
 ]
 
+CLASS_NAMES_split4 = [
+    "aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "chair",
+    "diningtable",  "motorbike", "person", "pottedplant",  "sofa", "train",
+    "tvmonitor", "cat", "cow", "dog", "horse", "sheep",
+]
+
 CLASS_NAMES = (CLASS_NAMES_origin, CLASS_NAMES_split1,
-               CLASS_NAMES_split2, CLASS_NAMES_split3)
+               CLASS_NAMES_split2, CLASS_NAMES_split3,
+               CLASS_NAMES_split4)
 # fmt: on
 
 
