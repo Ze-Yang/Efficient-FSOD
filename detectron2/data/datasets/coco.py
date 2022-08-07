@@ -161,8 +161,8 @@ Category ids in annotations are not in [1, #categories]! We'll apply a mapping f
     # with PathManager.open(output_file, "w") as json_file:
     #     logger.info(f"Caching annotations in COCO format: {output_file}")
     #     json.dump(coco_dict, json_file)
-
-    random.Random(cfg.SEED).shuffle(imgs_anns)
+    if 'train' in dataset_name:
+        random.Random(cfg.SEED).shuffle(imgs_anns)
     # images = []
     # annotations = []
     cls_num = {i: 0 for i in id_map.keys()}
@@ -209,11 +209,12 @@ Category ids in annotations are not in [1, #categories]! We'll apply a mapping f
                         #     cls_id = -1
                     if obj["iscrowd"]:
                         cls_id = -1
-                    elif cls_num[cls_id] < cfg.DATASETS.SHOT:
+                    elif cls_id in cls_num and cls_num[cls_id] < cfg.DATASETS.SHOT:
                         find = True
                         cls_num[cls_id] += 1
                     else:
-                        cls_id = -1
+                        cls_id = -1  # set those annotations to -1 to exclude them in loss computation
+                        # continue  # simply remove those irrelevant annotations
                     # else:
                     #     cls_id = -1
 
