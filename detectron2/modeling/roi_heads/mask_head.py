@@ -155,8 +155,6 @@ class MaskRCNNConvUpsampleHead(nn.Module):
         num_conv          = cfg.MODEL.ROI_MASK_HEAD.NUM_CONV
         input_channels    = input_shape.channels
         cls_agnostic_mask = cfg.MODEL.ROI_MASK_HEAD.CLS_AGNOSTIC_MASK
-        # cls_agnostic_mask = True if cfg.METHOD == 'ours' and cfg.PHASE == 2\
-        #     else cfg.MODEL.ROI_MASK_HEAD.CLS_AGNOSTIC_MASK
         # fmt: on
 
         self.conv_norm_relus = []
