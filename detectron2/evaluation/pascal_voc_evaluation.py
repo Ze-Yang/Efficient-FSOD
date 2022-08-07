@@ -14,6 +14,7 @@ from fvcore.common.file_io import PathManager
 from detectron2.data import MetadataCatalog
 from detectron2.utils import comm
 from detectron2.config import global_cfg
+from detectron2.utils.logger import create_small_table
 
 from .evaluator import DatasetEvaluator
 
@@ -98,10 +99,13 @@ class PascalVOCDetectionEvaluator(DatasetEvaluator):
             )
         )
 
+        self._logger.info('~~~~~~~~')
         with tempfile.TemporaryDirectory(prefix="pascal_voc_eval_") as dirname:
             res_file_template = os.path.join(dirname, "{}.txt")
 
             aps = defaultdict(list)  # iou -> ap per class
+            aps_base = defaultdict(list)
+            aps_novel = defaultdict(list)
             for cls_id, cls_name in enumerate(self._class_names[:15 if global_cfg.PHASE == 1 else None]):
                 lines = predictions.get(cls_id, [""])
 
@@ -119,25 +123,32 @@ class PascalVOCDetectionEvaluator(DatasetEvaluator):
                     )
                     aps[thresh].append(ap * 100)
                     if thresh == 50:
-                        self._logger.info('AP for {} = {:.2f}'.format(cls_name, ap * 100))
-        self._logger.info('~~~~~~~~')
-        self._logger.info('Results:')
-        for ap in aps[50]:
-            self._logger.info('{:.2f}'.format(ap))
-        self._logger.info('Base Mean AP = {:.2f}'.format(np.mean(aps[50][:15])))
-        if global_cfg.PHASE == 2:
-            self._logger.info('Novel Mean AP = {:.2f}'.format(np.mean(aps[50][15:])))
-        self._logger.info('~~~~~~~~')
-        self._logger.info('--------------------------------------------------------------')
-        self._logger.info('Results computed with the **unofficial** Python eval code.')
-        self._logger.info('Results should be very close to the official MATLAB eval code.')
-        self._logger.info('Recompute with `./tools/reval.py --matlab ...` for your paper.')
-        self._logger.info('-- Thanks, The Management')
-        self._logger.info('--------------------------------------------------------------')
+                        self._logger.info('AP50 for {} = {:.2f}'.format(cls_name, ap * 100))
+                    if cls_id < 15:
+                        aps_base[thresh].append(ap * 100)
+                    if cls_id >= 15:
+                        aps_novel[thresh].append(ap * 100)
 
+        self._logger.info('~~~~~~~~')
         ret = OrderedDict()
         mAP = {iou: np.mean(x) for iou, x in aps.items()}
         ret["bbox"] = {"AP": np.mean(list(mAP.values())), "AP50": mAP[50], "AP75": mAP[75]}
+
+        # adding evaluation of the base and novel classes
+        mAP_base = {iou: np.mean(x) for iou, x in aps_base.items()}
+        ret["bbox"].update(
+            {"bAP": np.mean(list(mAP_base.values())), "bAP50": mAP_base[50],
+             "bAP75": mAP_base[75]}
+        )
+
+        if global_cfg.PHASE == 2 and aps_novel:
+            mAP_novel = {iou: np.mean(x) for iou, x in aps_novel.items()}
+            ret["bbox"].update({
+                "nAP": np.mean(list(mAP_novel.values())), "nAP50": mAP_novel[50],
+                "nAP75": mAP_novel[75]
+            })
+
+        self._logger.info("Evaluate overall bbox:\n" + create_small_table(ret["bbox"]))
         return ret
 
 
