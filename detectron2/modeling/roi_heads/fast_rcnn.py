@@ -346,52 +346,30 @@ class FastRCNNOutputLayers(nn.Module):
             input_size = np.prod(input_size)
         self.num_classes = cfg.MODEL.ROI_HEADS.NUM_CLASSES
         self.cls_agnostic_bbox_reg = cfg.MODEL.ROI_BOX_HEAD.CLS_AGNOSTIC_BBOX_REG
-        self.setting = cfg.SETTING
-        self.reweight = cfg.MODEL.ROI_HEADS.NAME == 'ReweightedROIHeads'
 
         # The prediction layer for num_classes foreground classes and one background class
         # (hence + 1)
-        if self.reweight:
-            if self.setting == 'Incremental':
-                self.cls_score = nn.Linear(input_size, 16)
-                self.cls_score_novel = nn.Linear(input_size, 5)
-            else:
-                self.cls_score = nn.Linear(input_size, 1)
-        else:
-            self.cls_score = nn.Linear(input_size, self.num_classes + 1)
+        self.cls_score = nn.Linear(input_size, self.num_classes + 1)
         num_bbox_reg_classes = 1 if self.cls_agnostic_bbox_reg else self.num_classes
         self.bbox_pred = nn.Linear(input_size, num_bbox_reg_classes * box_dim)
 
         nn.init.normal_(self.cls_score.weight, std=0.01)
         nn.init.normal_(self.bbox_pred.weight, std=0.001)
-        init_list = [self.cls_score, self.bbox_pred]
-        if self.reweight and self.setting == 'Incremental':
-            nn.init.normal_(self.cls_score_novel.weight, std=0.01)
-            init_list.append(self.cls_score_novel)
-        for l in init_list:
+        for l in [self.cls_score, self.bbox_pred]:
             nn.init.constant_(l.bias, 0)
 
-    def forward(self, x, new_weight):
-        if x.dim() > 2 and not self.reweight:
+        self._do_cls_dropout = cfg.MODEL.ROI_HEADS.CLS_DROPOUT
+        self._dropout_ratio = cfg.MODEL.ROI_HEADS.DROPOUT_RATIO
+
+    def forward(self, x):
+        if x.dim() > 2:
             x = torch.flatten(x, start_dim=1)
-        if self.reweight and self.setting == 'Incremental':
-            base_bg_score = self.cls_score(x[:, 0])
-            novel_score = self.cls_score_novel(x[:, 1:])
-            novel_score = novel_score[:, range(5), range(5)]
-            scores = torch.cat([base_bg_score[:, :15], novel_score, base_bg_score[:, -1][:, None]], dim=1)
-            base_proposal_deltas = self.bbox_pred(x[:, 0]).unsqueeze(1). \
-                expand(-1, 15, -1).reshape(x.shape[0], -1)
-            novel_proposal_deltas = self.bbox_pred(x[:, 1:]).reshape(x.shape[0], -1)
-            proposal_deltas = torch.cat([base_proposal_deltas, novel_proposal_deltas], dim=1)
-        else:
-            if hasattr(self, 'new_weight'):
-                scores = x.mm(self.new_weight.t()) + self.cls_score.bias
-                del self.new_weight
-            else:
-                scores = self.cls_score(x)
-            # scores = self.cls_score(x).squeeze(-1) if self.reweight else self.cls_score(x)
-            proposal_deltas = self.bbox_pred(x)[:, :self.num_classes].view(self.bbox_pred(x).shape[0], -1) \
-                if self.reweight else self.bbox_pred(x)
+        proposal_deltas = self.bbox_pred(x)
+
+        if self._do_cls_dropout:
+            x = F.dropout(x, self._dropout_ratio, training=self.training)
+
+        scores = self.cls_score(x)
         return scores, proposal_deltas
 
 
@@ -417,22 +395,12 @@ class CosineSimOutputLayers(nn.Module):
             input_size = np.prod(input_size)
         self.num_classes = cfg.MODEL.ROI_HEADS.NUM_CLASSES
         self.cls_agnostic_bbox_reg = cfg.MODEL.ROI_BOX_HEAD.CLS_AGNOSTIC_BBOX_REG
-        self.setting = cfg.SETTING
-        self.reweight = cfg.MODEL.ROI_HEADS.NAME == 'ReweightedROIHeads'
         self.scale = nn.Parameter(torch.ones(1) * cfg.MODEL.ROI_BOX_HEAD.COSINE_SCALE, requires_grad=False)
         if self.scale == -1:
             # learnable global scaling factor
             self.scale = nn.Parameter(torch.ones(1) * 20.0)
 
-        if self.reweight:
-            if self.setting == 'Incremental':
-                self.cls_score = nn.Linear(input_size, 16, bias=False)
-                self.cls_score_novel = nn.Linear(input_size, 5, bias=False)
-                nn.init.normal_(self.cls_score_novel.weight, std=0.01)
-            else:
-                self.cls_score = nn.Linear(input_size, 1, bias=False)
-        else:
-            self.cls_score = nn.Linear(input_size, self.num_classes + 1, bias=False)
+        self.cls_score = nn.Linear(input_size, self.num_classes + 1, bias=False)
 
         num_bbox_reg_classes = 1 if self.cls_agnostic_bbox_reg else self.num_classes
         self.bbox_pred = nn.Linear(input_size, num_bbox_reg_classes * box_dim)
@@ -442,8 +410,11 @@ class CosineSimOutputLayers(nn.Module):
         for l in [self.bbox_pred]:
             nn.init.constant_(l.bias, 0)
 
+        self._do_cls_dropout = cfg.MODEL.ROI_HEADS.CLS_DROPOUT
+        self._dropout_ratio = cfg.MODEL.ROI_HEADS.DROPOUT_RATIO
+
     def forward(self, x):
-        if x.dim() > 2 and not self.reweight:
+        if x.dim() > 2:
             x = torch.flatten(x, start_dim=1)
 
         # normalize the input x along the last dimension
@@ -451,23 +422,12 @@ class CosineSimOutputLayers(nn.Module):
 
         # normalize weight
         self.cls_score.weight.data = F.normalize(self.cls_score.weight.data, dim=-1)
-        if self.reweight and self.setting == 'Incremental':
-            self.cls_score_novel.weight.data = F.normalize(self.cls_score_novel.weight.data, dim=-1)
 
-        if self.reweight and self.setting == 'Incremental':
-            base_bg_score = self.cls_score(x_normalized[:, 0])
-            novel_score = self.cls_score_novel(x_normalized[:, 1:])
-            novel_score = novel_score[:, range(5), range(5)]
-            scores = torch.cat([base_bg_score[:, :15], novel_score, base_bg_score[:, -1][:, None]], dim=1)
-            base_proposal_deltas = self.bbox_pred(x[:, 0]).unsqueeze(1). \
-                expand(-1, 15, -1).reshape(x.shape[0], -1)
-            novel_proposal_deltas = self.bbox_pred(x[:, 1:]).reshape(x.shape[0], -1)
-            proposal_deltas = torch.cat([base_proposal_deltas, novel_proposal_deltas], dim=1)
-        else:
-            scores = self.cls_score(x_normalized).squeeze(-1) if self.reweight else self.cls_score(x_normalized)
-            proposal_deltas = self.bbox_pred(x)[:, :self.num_classes].view(self.bbox_pred(x).shape[0], -1) \
-                if self.reweight else self.bbox_pred(x)
-        scores = scores * self.scale
+        if self._do_cls_dropout:
+            x_normalized = F.dropout(x_normalized, self._dropout_ratio, training=self.training)
+
+        scores = self.cls_score(x_normalized) * self.scale
+        proposal_deltas = self.bbox_pred(F.relu(x))
         return scores, proposal_deltas
 
 

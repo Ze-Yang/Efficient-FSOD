@@ -387,8 +387,47 @@ class Res5ROIHeads(ROIHeads):
 
         if self.training:
             proposals = self.label_and_sample_proposals(proposals, targets)
-        del targets
 
+        if self.training:
+            del targets
+            losses, box_features = self._forward_box(features, proposals)
+            if self.mask_on:
+                proposals, fg_selection_masks = select_foreground_proposals(
+                    proposals, self.num_classes
+                )
+                # Since the ROI feature transform is shared between boxes and masks,
+                # we don't need to recompute features. The mask loss is only defined
+                # on foreground proposals, so we need to select out the foreground
+                # features.
+                mask_features = box_features[torch.cat(fg_selection_masks, dim=0)]
+                del box_features
+                mask_logits = self.mask_head(mask_features)
+                losses["loss_mask"] = mask_rcnn_loss(mask_logits, proposals)
+            return [], losses
+        else:
+            if targets is not None:  # for cls_score parameters initialization
+                return self._init_weight([features[f] for f in self.in_features], targets)
+            del targets
+            # proposals[0] = proposals[0][:512]  # for calculating the training FLOPs
+            pred_instances = self._forward_box(features, proposals)
+            pred_instances = self.forward_with_given_boxes(features, pred_instances)
+            return pred_instances, {}
+
+    def _forward_box(self, features, proposals):
+        """
+        Forward logic of the box prediction branch.
+
+        Args:
+            features (list[Tensor]): #level input features for box prediction
+            proposals (list[Instances]): the per-image object proposals with
+                their matching ground truth.
+                Each has fields "proposal_boxes", and "objectness_logits",
+                "gt_classes", "gt_boxes".
+
+        Returns:
+            In training, a dict of losses.
+            In inference, a list of `Instances`, the predicted instances.
+        """
         proposal_boxes = [x.proposal_boxes for x in proposals]
         box_features = self._shared_roi_transform(
             [features[f] for f in self.in_features], proposal_boxes
@@ -406,27 +445,25 @@ class Res5ROIHeads(ROIHeads):
         )
 
         if self.training:
-            del features
-            losses = outputs.losses()
-            if self.mask_on:
-                proposals, fg_selection_masks = select_foreground_proposals(
-                    proposals, self.num_classes
-                )
-                # Since the ROI feature transform is shared between boxes and masks,
-                # we don't need to recompute features. The mask loss is only defined
-                # on foreground proposals, so we need to select out the foreground
-                # features.
-                mask_features = box_features[torch.cat(fg_selection_masks, dim=0)]
-                del box_features
-                mask_logits = self.mask_head(mask_features)
-                losses["loss_mask"] = mask_rcnn_loss(mask_logits, proposals)
-            return [], losses
+            return outputs.losses(), box_features
         else:
             pred_instances, _ = outputs.inference(
                 self.test_score_thresh, self.test_nms_thresh, self.test_detections_per_img
             )
-            pred_instances = self.forward_with_given_boxes(features, pred_instances)
-            return pred_instances, {}
+            return pred_instances
+
+    def _init_weight(self, features, targets):
+        box_features = self._shared_roi_transform(features, [x.gt_boxes for x in targets])
+        activations = box_features.mean(dim=[2, 3])
+        gt_classes = torch.cat([x.gt_classes for x in targets], dim=0)
+        keep = gt_classes != -1
+        activations = activations[keep]
+        gt_classes = gt_classes[keep].tolist()
+        cls_dict_act = {i: [] for i in range(self.num_classes)}
+        for i in range(len(gt_classes)):
+            cls_dict_act[gt_classes[i]].append(activations[i])
+        del targets
+        return cls_dict_act
 
     def forward_with_given_boxes(self, features, instances):
         """

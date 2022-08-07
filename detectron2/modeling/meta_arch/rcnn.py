@@ -13,6 +13,7 @@ from ..postprocessing import detector_postprocess
 from ..proposal_generator import build_proposal_generator
 from ..roi_heads import build_roi_heads
 from .build import META_ARCH_REGISTRY
+from .gdl import decouple_layer, AffineLayer
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,11 @@ class GeneralizedRCNN(nn.Module):
         pixel_mean = torch.Tensor(cfg.MODEL.PIXEL_MEAN).to(self.device).view(num_channels, 1, 1)
         pixel_std = torch.Tensor(cfg.MODEL.PIXEL_STD).to(self.device).view(num_channels, 1, 1)
         self.normalizer = lambda x: (x - pixel_mean) / pixel_std
+        if cfg.MODEL.ROI_HEADS.NAME == "Res5ROIHeads":
+            if cfg.MODEL.RPN.ENABLE_DECOUPLE:
+                self.affine_rpn = AffineLayer(num_channels=self.backbone.output_shape()['res4'].channels, bias=True)
+            if cfg.MODEL.ROI_HEADS.ENABLE_DECOUPLE:
+                self.affine_rcnn = AffineLayer(num_channels=self.backbone.output_shape()['res4'].channels, bias=True)
         self.to(self.device)
 
         if cfg.MODEL.BACKBONE.FREEZE:
@@ -193,14 +199,36 @@ class GeneralizedRCNN(nn.Module):
 
         features = self.backbone(images.tensor)
 
+        features_de_rpn = features
+        if self.cfg.MODEL.RPN.ENABLE_DECOUPLE:
+            scale = self.cfg.MODEL.RPN.BACKWARD_SCALE
+            if self.cfg.MODEL.ROI_HEADS.NAME == "StandardROIHeads":
+                features_de_rpn = {k: decouple_layer(features[k], scale) for k in features}
+            elif self.cfg.MODEL.ROI_HEADS.NAME == "Res5ROIHeads":
+                features_de_rpn = {k: self.affine_rpn(decouple_layer(features[k], scale)) for k in features}
+            else:
+                raise NotImplementedError("Gradient decoupling does not support {}."
+                                          .format(self.cfg.MODEL.ROI_HEADS.NAME))
+
         if self.proposal_generator:
-            proposals, proposal_losses = self.proposal_generator(images, features, gt_instances)
+            proposals, proposal_losses = self.proposal_generator(images, features_de_rpn, gt_instances)
         else:
             assert "proposals" in batched_inputs[0]
             proposals = [x["proposals"].to(self.device) for x in batched_inputs]
             proposal_losses = {}
 
-        _, detector_losses = self.roi_heads(images, features, proposals, gt_instances)
+        features_de_rcnn = features
+        if self.cfg.MODEL.ROI_HEADS.ENABLE_DECOUPLE:
+            scale = self.cfg.MODEL.ROI_HEADS.BACKWARD_SCALE
+            if self.cfg.MODEL.ROI_HEADS.NAME == "StandardROIHeads":
+                features_de_rcnn = {k: decouple_layer(features[k], scale) for k in features}
+            elif self.cfg.MODEL.ROI_HEADS.NAME == "Res5ROIHeads":
+                features_de_rcnn = {k: self.affine_rcnn(decouple_layer(features[k], scale)) for k in features}
+            else:
+                raise NotImplementedError("Gradient decoupling does not support {}."
+                                          .format(self.cfg.MODEL.ROI_HEADS.NAME))
+
+        _, detector_losses = self.roi_heads(images, features_de_rcnn, proposals, gt_instances)
         if self.vis_period > 0:
             storage = get_event_storage()
             if storage.iter % self.vis_period == 0:
@@ -244,14 +272,45 @@ class GeneralizedRCNN(nn.Module):
                     gt_instances = [x["targets"].to(self.device) for x in batched_inputs]
                 else:
                     gt_instances = None
-                return self.roi_heads(images, features, None, gt_instances)
+                features_de_rcnn = features
+                if self.cfg.MODEL.ROI_HEADS.ENABLE_DECOUPLE:
+                    scale = self.cfg.MODEL.ROI_HEADS.BACKWARD_SCALE
+                    if self.cfg.MODEL.ROI_HEADS.NAME == "StandardROIHeads":
+                        features_de_rcnn = {k: decouple_layer(features[k], scale) for k in features}
+                    elif self.cfg.MODEL.ROI_HEADS.NAME == "Res5ROIHeads":
+                        features_de_rcnn = {k: self.affine_rcnn(decouple_layer(features[k], scale)) for k in features}
+                    else:
+                        raise NotImplementedError("Gradient decoupling does not support {}."
+                                                  .format(self.cfg.MODEL.ROI_HEADS.NAME))
+                return self.roi_heads(images, features_de_rcnn, None, gt_instances)
             else:
+                features_de_rpn = features
+                if self.cfg.MODEL.RPN.ENABLE_DECOUPLE:
+                    scale = self.cfg.MODEL.RPN.BACKWARD_SCALE
+                    if self.cfg.MODEL.ROI_HEADS.NAME == "StandardROIHeads":
+                        features_de_rpn = {k: decouple_layer(features[k], scale) for k in features}
+                    elif self.cfg.MODEL.ROI_HEADS.NAME == "Res5ROIHeads":
+                        features_de_rpn = {k: self.affine_rpn(decouple_layer(features[k], scale)) for k in features}
+                    else:
+                        raise NotImplementedError("Gradient decoupling does not support {}."
+                                                  .format(self.cfg.MODEL.ROI_HEADS.NAME))
                 if self.proposal_generator:
-                    proposals, _ = self.proposal_generator(images, features, None)
+                    proposals, _ = self.proposal_generator(images, features_de_rpn, None)
                 else:
                     assert "proposals" in batched_inputs[0]
                     proposals = [x["proposals"].to(self.device) for x in batched_inputs]
-                results, _ = self.roi_heads(images, features, proposals, None)
+
+                features_de_rcnn = features
+                if self.cfg.MODEL.ROI_HEADS.ENABLE_DECOUPLE:
+                    scale = self.cfg.MODEL.ROI_HEADS.BACKWARD_SCALE
+                    if self.cfg.MODEL.ROI_HEADS.NAME == "StandardROIHeads":
+                        features_de_rcnn = {k: decouple_layer(features[k], scale) for k in features}
+                    elif self.cfg.MODEL.ROI_HEADS.NAME == "Res5ROIHeads":
+                        features_de_rcnn = {k: self.affine_rcnn(decouple_layer(features[k], scale)) for k in features}
+                    else:
+                        raise NotImplementedError("Gradient decoupling does not support {}."
+                                                  .format(self.cfg.MODEL.ROI_HEADS.NAME))
+                results, _ = self.roi_heads(images, features_de_rcnn, proposals, None)
         else:
             detected_instances = [x.to(self.device) for x in detected_instances]
             results = self.roi_heads.forward_with_given_boxes(features, detected_instances)

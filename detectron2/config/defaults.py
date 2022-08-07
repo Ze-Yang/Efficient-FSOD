@@ -239,6 +239,9 @@ _C.MODEL.RPN.POST_NMS_TOPK_TEST = 1000
 # NMS threshold used on RPN proposals
 _C.MODEL.RPN.NMS_THRESH = 0.7
 
+_C.MODEL.RPN.ENABLE_DECOUPLE = False
+_C.MODEL.RPN.BACKWARD_SCALE = 1.0
+
 # ---------------------------------------------------------------------------- #
 # ROI HEADS options
 # ---------------------------------------------------------------------------- #
@@ -278,6 +281,10 @@ _C.MODEL.ROI_HEADS.NMS_THRESH_TEST = 0.5
 # train ROI heads.
 _C.MODEL.ROI_HEADS.PROPOSAL_APPEND_GT = True
 
+_C.MODEL.ROI_HEADS.ENABLE_DECOUPLE = False
+_C.MODEL.ROI_HEADS.BACKWARD_SCALE = 1.0
+_C.MODEL.ROI_HEADS.CLS_DROPOUT = False
+_C.MODEL.ROI_HEADS.DROPOUT_RATIO = 0.8
 
 # ---------------------------------------------------------------------------- #
 # Meta Head
