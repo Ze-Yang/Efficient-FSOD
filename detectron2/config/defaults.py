@@ -633,3 +633,5 @@ _C.VIS_PERIOD = 0
 # Do not commit any configs into it.
 _C.GLOBAL = CN()
 _C.GLOBAL.HACK = 1.0
+
+_C.MUTE_HEADER = False

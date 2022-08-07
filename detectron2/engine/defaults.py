@@ -102,7 +102,8 @@ def default_setup(cfg, args):
     logger = setup_logger(output_dir, distributed_rank=rank)
 
     logger.info("Rank of current process: {}. World size: {}".format(rank, comm.get_world_size()))
-    logger.info("Environment info:\n" + collect_env_info())
+    if not cfg.MUTE_HEADER:
+        logger.info("Environment info:\n" + collect_env_info())
 
     logger.info("Command line arguments: " + str(args))
     if hasattr(args, "config_file") and args.config_file != "":
@@ -112,7 +113,8 @@ def default_setup(cfg, args):
             )
         )
 
-    logger.info("Running with full config:\n{}".format(cfg))
+    if not cfg.MUTE_HEADER:
+        logger.info("Running with full config:\n{}".format(cfg))
     if comm.is_main_process() and output_dir and not args.retest and not args.eval_only:
         # Note: some of our scripts may expect the existence of
         # config.yaml in output directory
@@ -383,8 +385,9 @@ class DefaultTrainer(SimpleTrainer):
         Overwrite it if you'd like a different model.
         """
         model = build_model(cfg)
-        logger = logging.getLogger(__name__)
-        logger.info("Model:\n{}".format(model))
+        if not cfg.MUTE_HEADER:
+            logger = logging.getLogger(__name__)
+            logger.info("Model:\n{}".format(model))
         return model
 
     @classmethod
