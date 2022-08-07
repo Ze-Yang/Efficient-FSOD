@@ -38,6 +38,7 @@ class FastRCNNConvFCHead(nn.Module):
         num_fc     = cfg.MODEL.ROI_BOX_HEAD.NUM_FC
         fc_dim     = cfg.MODEL.ROI_BOX_HEAD.FC_DIM
         norm       = cfg.MODEL.ROI_BOX_HEAD.NORM
+        self.predictor = cfg.MODEL.ROI_BOX_HEAD.PREDICTOR
         # fmt: on
         assert num_conv + num_fc > 0
 
@@ -77,8 +78,12 @@ class FastRCNNConvFCHead(nn.Module):
         if len(self.fcs):
             if x.dim() > 2:
                 x = torch.flatten(x, start_dim=x.size().index(self.fc_input_channels))
-            for layer in self.fcs:
-                x = F.relu(layer(x))
+            if self.predictor == 'CosineSimOutputLayers':
+                for i, layer in enumerate(self.fcs):
+                    x = F.relu(layer(x)) if i != len(self.fcs) - 1 else layer(x)  # remove last ReLU
+            else:
+                for layer in self.fcs:
+                    x = F.relu(layer(x))
         return x
 
     @property
