@@ -1,0 +1,37 @@
+_BASE_: "../Base-RCNN-C4.yaml"
+MODEL:
+  WEIGHTS: "/Path/to/Base/Pretrain/Weight"
+  MASK_ON: False
+  RESNETS:
+    DEPTH: 101
+  BACKBONE:
+    FREEZE: False
+    FREEZE_AT: 3
+  RPN:
+    ENABLE_DECOUPLE: True
+    BACKWARD_SCALE: 0.0
+  ROI_BOX_HEAD:
+    CLS_AGNOSTIC_BBOX_REG: False
+    POOLER_RESOLUTION: 7
+    FREEZE: True
+  ROI_HEADS:
+    ENABLE_DECOUPLE: True
+    BACKWARD_SCALE: 0.01
+    CLS_DROPOUT: True
+    NUM_CLASSES: 80
+DATASETS:
+  TRAIN: ('coco_2017_train_all',)
+  TEST: ('coco_2017_val_all',)
+  SHOT: 10
+SOLVER:
+  IMS_PER_BATCH: 16
+  BASE_LR: 0.01
+  STEPS: (4800,)
+  MAX_ITER: 6000
+  CHECKPOINT_PERIOD: 100000
+  WARMUP_ITERS: 0
+  WEIGHT_DECAY: 5e-5
+SETTING: 'Incremental'
+PHASE: 2
+METHOD: 'ft'
+OUTPUT_DIR: "/Path/to/Output/Dir"
