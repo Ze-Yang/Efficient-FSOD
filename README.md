@@ -17,20 +17,7 @@ Qualitative results on Pascal-VOC, COCO and LVIS demonstrate our approach sets n
 higher efficiency.
 We hope to motivate a trend toward powerful yet efficient few-shot technique development.
 
-## News:
-We will release the full codes along with detailed instructions by 10 Aug 2022.
 
-## Citing Efficient-FSOD
-If you find this repository useful in your research, please consider to cite our paper with the following
-BibTeX entry.
-```BibTeX
-@article{yang2022efficient,
-  title={Efficient Few-Shot Object Detection via Knowledge Inheritance},
-  author={Yang, Ze and Zhang, Chi and Li, Ruibo and Lin, Guosheng},
-  journal={arXiv preprint arXiv:2203.12224},
-  year={2022}
-}
-```
 
 ## Installation
 ```
@@ -49,8 +36,34 @@ pip install tensorboard
 To __rebuild__ detectron2, `rm -rf build/ **/*.so` then `pip install -e .`.
 You often need to rebuild detectron2 after reinstalling PyTorch.
 
-## Quick Start
-Details about how to use this repository is coming soon.
+## Get Started
+
+### Training & Evaluation in Command Line
+
+To train a model, run
+```angular2html
+python tools/train_net.py --num-gpus 4 \
+        --config-file configs/COCO-detection/faster_rcnn_R_101_FPN_base.yaml
+```
+
+To evaluate the trained models, run
+```angular2html
+python tools/test_net.py --num-gpus 4 \
+        --config-file configs/COCO-detection/faster_rcnn_R_101_FPN_ours_10shot.yaml \
+        --eval-only
+```
+
+## Citing Efficient-FSOD
+If you find this repository useful in your research, please consider to cite our paper with the following
+BibTeX entry.
+```BibTeX
+@article{yang2022efficient,
+  title={Efficient Few-Shot Object Detection via Knowledge Inheritance},
+  author={Yang, Ze and Zhang, Chi and Li, Ruibo and Lin, Guosheng},
+  journal={arXiv preprint arXiv:2203.12224},
+  year={2022}
+}
+```
 
 ## License
 
