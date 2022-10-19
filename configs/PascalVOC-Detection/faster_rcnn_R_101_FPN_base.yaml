@@ -5,7 +5,7 @@ MODEL:
   RESNETS:
     DEPTH: 101
   ROI_BOX_HEAD:
-    CLS_AGNOSTIC_BBOX_REG: True
+    CLS_AGNOSTIC_BBOX_REG: False
   ROI_HEADS:
     NUM_CLASSES: 15
 INPUT:
@@ -19,5 +19,4 @@ SOLVER:
   MAX_ITER: 18000
   WARMUP_ITERS: 100
 PHASE: 1
-OUTPUT_DIR:
-  ./results/VOC_split1_pretrain_R101
+OUTPUT_DIR: "/Path/to/Output/Dir"
