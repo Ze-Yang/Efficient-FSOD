@@ -5,7 +5,7 @@ MODEL:
   RESNETS:
     DEPTH: 101
   ROI_BOX_HEAD:
-    CLS_AGNOSTIC_BBOX_REG: True
+    CLS_AGNOSTIC_BBOX_REG: False
   ROI_HEADS:
     NUM_CLASSES: 60
 DATASETS:
@@ -15,4 +15,4 @@ SOLVER:
   STEPS: (85000, 100000)
   MAX_ITER: 110000
 OUTPUT_DIR:
-  ./results/COCO60_pretrain_R101_1x
+  "/Path/to/Output/Dir"
