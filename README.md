@@ -1,7 +1,7 @@
 ## Efficient Few-Shot Object Detection via Knowledge Inheritance
 
 This repository contains the official implementation for the paper 
-[Efficient Few-Shot Object Detection via Knowledge Inheritance](https://arxiv.org/abs/2203.12224).
+[Efficient Few-Shot Object Detection via Knowledge Inheritance](https://arxiv.org/abs/2203.12224) (TIP 2022).
 The codes are built upon 
 [Detectron2](https://github.com/facebookresearch/detectron2). Many thanks to
 their awesome open-source library.
@@ -58,10 +58,13 @@ If you find this repository useful in your research, please consider to cite our
 BibTeX entry.
 ```BibTeX
 @article{yang2022efficient,
-  title={Efficient Few-Shot Object Detection via Knowledge Inheritance},
-  author={Yang, Ze and Zhang, Chi and Li, Ruibo and Lin, Guosheng},
-  journal={arXiv preprint arXiv:2203.12224},
-  year={2022}
+  title={Efficient few-shot object detection via knowledge inheritance},
+  author={Yang, Ze and Zhang, Chi and Li, Ruibo and Xu, Yi and Lin, Guosheng},
+  journal={IEEE Transactions on Image Processing},
+  volume={32},
+  pages={321--334},
+  year={2022},
+  publisher={IEEE}
 }
 ```
 
